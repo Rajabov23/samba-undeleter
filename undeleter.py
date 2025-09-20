@@ -211,7 +211,7 @@ def Save_recovered(file_path, recovered_dict):
         result = False
         
     return result
-
+    
 
 def Recall_recovered(file_path):
     '''Read previously recovered entries from a file'''
@@ -380,16 +380,20 @@ def _(s):
 
 class HttpGetHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        '''Request for search'''
         decoded_url = unquote(self.path)
         print(decoded_url)
 
         client_message = decoded_url.removeprefix('/search/')
         found_lines = Read_log(client_message, AUDIT_LOG)
+        print("FOUND LINES", found_lines)
         print('GET MSG:', client_message)
         #print(self.client_address)
         #print(self.path)
         if found_lines:
-            json_data = json.dumps(found_lines)
+            answer = {"found_lines": found_lines,  
+                      }
+            json_data = json.dumps(answer)
             self.send_response(200)
             self.send_header("Content-type", "application/json")
             self.end_headers()
@@ -399,54 +403,53 @@ class HttpGetHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
-        self.send_header("Content-type", "application/json")
+        '''Request for recovery'''
         content_length = int(self.headers['Content-Length'])
-
+        
         post_data = json.loads(self.rfile.read(content_length).decode())
-        print('POST MSG:', post_data)
+        print('POST DATA:', post_data)
         recover_line = find_by_timestamp(post_data.get('time'), AUDIT_LOG)
-        status = do_recovery(recover_line)
+        recovery_result = do_recovery(recover_line)
         print('RECOVER_LINE:', recover_line)
-        print('STATUS', status)
+        print('recovery_result', recovery_result)
         try:
-            json_data = json.dumps(status)
+            json_data = json.dumps(recovery_result)
         except Exception:
             print('UNABLE TO LOAD JSON')
             json_data = {}
-
-        if status.get("status").get("info"):
+            
+        print("JSON DATA", json_data)
+        if recovery_result.get("status").get("info"):
             self.send_response(200)
+            self.send_header("Content-type", "application/json")
             self.end_headers()
             self.wfile.write(bytes(json_data, "utf8"))
         else:
             self.send_response(204)
             self.end_headers()
 
-        print('POST_DATA:', post_data)
-
 
 def do_recovery(line):
     '''Move deleted or renamed files and folders to original destinations'''
-    status = {"status": {"info": None}}
-    err = {"info": None}
-    reply = {"info": None}
     if line.get("operation") == RENAMEAT and not line.get("targetname"):
         print("NO TARGETNAME:", line)
     if line.get("operation") == RENAMEAT and line.get("status") == "ok":
         if not line.get("targetname"):
-            reply = {"info": "targetname is not provided BY THE CLIENT"} #TODO move to child function
+            status = {"status": "Error",
+                     "info": "targetname is not provided BY THE CLIENT",} #TODO move to child function
         else:
             reply = Rename(line.get("sourcename"), line.get("targetname"))
-        status = {"status": reply}
+            status = {"status": "TODO", 
+                      "info": reply,}
+
     elif line.get("operation") == UNLINKAT and line.get("status") == "ok":
-        recover_reply = Recover(line.get("sourcename"))
-        if recover_reply:
-            status = {"status": recover_reply}
+        reply = Recover(line.get("sourcename"))
+        if reply:
+            status = {"status": reply}
     else:
         print("NO DICTIONARY MATCH")
-    
-    if status:
-        Save_recovered(UNDELETER_LOG, line)
+
+    Save_recovered(UNDELETER_LOG, line)
 
     return status
 
