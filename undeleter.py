@@ -117,28 +117,30 @@ def find_by_timestamp(query, file_name):
     
 def Recover(original_path_str):
     '''Try to recover(move) file from recycle directory'''
-    message = {"info": _("Not recovered")}
+    message = {"rec_status": "not recovered", "info": _("Not recovered")}
     original_path = pathlib.Path(original_path_str)
     deleted_dir = original_path_str.removeprefix(SHARE_PATH).removeprefix('/')
     found_path = pathlib.Path(pathlib.Path(SHARE_PATH), pathlib.Path(RECYLCE_DIR), pathlib.Path(deleted_dir))
     is_success = Move(original_path, found_path)
     if is_success:
-        message = {"info": _("Recovered"),
-                   "found_path": str(found_path)}
+        message = {"rec_status": "recovered",
+                   "info": _("Recovered"),
+                   "found_path": str(found_path),}
     #else:
     #    print("Not found in recycle")
     return message
-    
+
 
 def Rename(original_path_str, found_path_str):
     '''Try to rename(move) accidentally missplaced file from another directory'''
-    message = {"info": _("Not renamed")}
+    message = {"rec_status": "renamed", "info": _("Not renamed")}
     original_path = pathlib.Path(original_path_str)
     found_path = pathlib.Path(found_path_str)
     is_success = Move(original_path, found_path)
     if is_success:
-        message = {"info": _("Renamed"),
-                   "found_path": str(found_path)}
+        message = {"rec_status": "renamed",
+                   "info": _("Renamed"),
+                   "found_path": str(found_path),}
 
     return message
     
@@ -390,17 +392,17 @@ class HttpGetHandler(BaseHTTPRequestHandler):
         print('GET MSG:', client_message)
         #print(self.client_address)
         #print(self.path)
-        if found_lines:
-            answer = {"found_lines": found_lines,  
-                      }
-            json_data = json.dumps(answer)
-            self.send_response(200)
-            self.send_header("Content-type", "application/json")
-            self.end_headers()
-            self.wfile.write(bytes(json_data, 'utf8'))
-        else:
-            self.send_response(204)
-            self.end_headers()
+
+        answer = {"found_lines": found_lines,  
+                    }
+        json_data = json.dumps(answer)
+        self.send_response(200)
+        self.send_header("Content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(bytes(json_data, 'utf8'))
+        # else:
+            # self.send_response(204)
+            # self.end_headers()
 
     def do_POST(self):
         '''Request for recovery'''
@@ -419,7 +421,7 @@ class HttpGetHandler(BaseHTTPRequestHandler):
             json_data = {}
             
         print("JSON DATA", json_data)
-        if recovery_result.get("status").get("info"):
+        if recovery_result.get("rec_status"):
             self.send_response(200)
             self.send_header("Content-type", "application/json")
             self.end_headers()
@@ -435,23 +437,19 @@ def do_recovery(line):
         print("NO TARGETNAME:", line)
     if line.get("operation") == RENAMEAT and line.get("status") == "ok":
         if not line.get("targetname"):
-            status = {"status": "Error",
+            rec_status = {"rec_status": "Error",
                      "info": "targetname is not provided BY THE CLIENT",} #TODO move to child function
         else:
-            reply = Rename(line.get("sourcename"), line.get("targetname"))
-            status = {"status": "TODO", 
-                      "info": reply,}
+            rec_status = Rename(line.get("sourcename"), line.get("targetname"))
 
     elif line.get("operation") == UNLINKAT and line.get("status") == "ok":
-        reply = Recover(line.get("sourcename"))
-        if reply:
-            status = {"status": reply}
+        rec_status = Recover(line.get("sourcename"))
     else:
         print("NO DICTIONARY MATCH")
 
     Save_recovered(UNDELETER_LOG, line)
 
-    return status
+    return rec_status
 
 
 def handleArgs():

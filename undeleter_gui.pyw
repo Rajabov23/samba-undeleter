@@ -134,6 +134,7 @@ def search(search_name):
     if 'root' in globals() and root: root.update_idletasks()
     
     found_entries = search_call(search_name)
+    print("FOUND ENTRIES", found_entries)
     FOUND_LINES = found_entries.get("found_lines") 
     print("FOUND ENTRIES", type(found_entries), found_entries)
     
@@ -141,7 +142,7 @@ def search(search_name):
 
     if found_entries is not None:
         button_restore.config(state=tk.NORMAL)
-        info_display_var.set(f"{_('Search finished. Found entries:')} {len(found_entries)}")
+        info_display_var.set(f"{_('Search finished. Found entries:')} {len(found_entries.get("found_lines"))}")
     else:
         info_display_var.set(_("Search error"))
     root.update_idletasks()
@@ -212,7 +213,7 @@ def restore():
     try:
         decoded_answer = server_answer.decode()
         json_loads = json.loads(decoded_answer)
-        info_display_var.set(json_loads.get("status"))
+        info_display_var.set(json_loads.get("rec_status"))
     except:
         raise
         #info_display_var.set("UNKNOWN STATUS")
@@ -250,16 +251,17 @@ def restore():
 
 def create_treeview(data_list):
     global tv, info_display_var
-    #data_list = data_list[found_lines]
+    
+    print("DATA LIST", data_list)
     
     for to_clean_row in tv.get_children():
         tv.delete(to_clean_row)
         
-    if data_list is None: #or not isinstance(data_list, list):
-        if info_display_var: info_display_var.set(_("Unable to load table data or data is invalid"))
-        tv["columns"] = []
-        print("DATA LIST IS NONE")
-        return
+    # if data_list is None: #or not isinstance(data_list, list):
+        # if info_display_var: info_display_var.set(_("Unable to load table data or data is invalid"))
+        # tv["columns"] = []
+        # print("DATA LIST IS NONE")
+        # return
         
     default_keys_order = ['sourcename', 'targetname', 'operation', 'client', 'time']
     display_columns_translated = [_ (key) for key in default_keys_order] #Translated column names
