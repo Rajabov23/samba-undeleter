@@ -26,7 +26,7 @@ PATH_TO_SHARE = {"/srv/public": "P:",
                  "/storage/public": "P:",
                 } # Visualy map paths to share letters for convenience 
 
-LANGUAGES = ["English", "Russian", "German"] # See underscore _() function
+LANGUAGES = ["English", "Russian", "Deutsch"] # See underscore _() function
 
 LANGUAGE = "English" #Language by default
 
@@ -67,6 +67,7 @@ def restore_call(restore_timestamp):
 
     data = {}
     data['time'] = restore_timestamp
+    data["language"] = LANGUAGE
     data = json.dumps(data)
     print("DATA", data)
     encoded_data = data.encode()
@@ -138,7 +139,7 @@ def search(search_name):
     FOUND_LINES = found_entries.get("found_lines") 
     print("FOUND ENTRIES", type(found_entries), found_entries)
     
-    create_treeview(FOUND_LINES)
+    create_treeview(FOUND_LINES, found_entries.get("already_recovered"))
 
     if found_entries is not None:
         button_restore.config(state=tk.NORMAL)
@@ -249,11 +250,11 @@ def restore():
     root.update_idletasks()
 
 
-def create_treeview(data_list):
+def create_treeview(data_list, already_recovered):
     global tv, info_display_var
     
     print("DATA LIST", data_list)
-    
+    print("ALREADY RECOVERED", already_recovered)
     for to_clean_row in tv.get_children():
         tv.delete(to_clean_row)
         
@@ -459,7 +460,7 @@ def _(s):
     try:
         if LANGUAGE == 'English' or not LANGUAGE:
             return s
-        elif LANGUAGE == 'German':
+        elif LANGUAGE == 'Deutsch':
             return deutschStrings[s]
         elif LANGUAGE == 'Russian':
             return russianStrings[s]

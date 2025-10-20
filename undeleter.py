@@ -18,7 +18,7 @@ import subprocess
 import argparse
 import random
 import string
-#from datetime import datetime
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler
 from http.server import HTTPServer
 from urllib.parse import unquote
@@ -27,11 +27,11 @@ from urllib.parse import unquote
 HOST = '0.0.0.0'
 PORT = 999 
 AUDIT_LOG = "/var/log/samba/audit.log"
-UNDELETER_LOG = "/var/log/samba/undeleter_recovered.log"
+RECOVERY_LOG = "/var/log/samba/undeleter_recovered.log"
 RECOVER_GROUPS = ["teachers"]
 SHARE_PATH = "/srv/public"
 RECYLCE_DIR = ".recycle"
-LANGUAGE = "English"
+LANGUAGE = "English" #fallback language
 RENAMEAT = "renameat"
 UNLINKAT = "unlinkat"
 
@@ -117,13 +117,13 @@ def find_by_timestamp(query, file_name):
     
 def Recover(original_path_str):
     '''Try to recover(move) file from recycle directory'''
-    message = {"rec_status": "not recovered", "info": _("Not recovered")}
+    message = {"rec_status": _("Not recovered"), "info": _("Not recovered")}
     original_path = pathlib.Path(original_path_str)
     deleted_dir = original_path_str.removeprefix(SHARE_PATH).removeprefix('/')
     found_path = pathlib.Path(pathlib.Path(SHARE_PATH), pathlib.Path(RECYLCE_DIR), pathlib.Path(deleted_dir))
     is_success = Move(original_path, found_path)
     if is_success:
-        message = {"rec_status": "recovered",
+        message = {"rec_status": _("Recovered"),
                    "info": _("Recovered"),
                    "found_path": str(found_path),}
     #else:
@@ -133,12 +133,12 @@ def Recover(original_path_str):
 
 def Rename(original_path_str, found_path_str):
     '''Try to rename(move) accidentally missplaced file from another directory'''
-    message = {"rec_status": "renamed", "info": _("Not renamed")}
+    message = {"rec_status": _("Not renamed"), "info": _("Not renamed")}
     original_path = pathlib.Path(original_path_str)
     found_path = pathlib.Path(found_path_str)
     is_success = Move(original_path, found_path)
     if is_success:
-        message = {"rec_status": "renamed",
+        message = {"rec_status": _("Renamed"),
                    "info": _("Renamed"),
                    "found_path": str(found_path),}
 
@@ -198,14 +198,13 @@ def Find_dir(single_dict, is_allowed):
     return split_path
     
 
-def Save_recovered(file_path, recovered_dict):
-    '''Wright recovered entries to a file'''
+def Save_recovered(file_path, timestamp):
+    '''Write recovered entries to a file'''
     try:
         p = pathlib.Path(file_path)
         print(f'Opening {p}')
         with p.open("a", newline="\n", encoding="UTF-8") as f:
-            dumps = json.dumps(recovered_dict)
-            f.write(dumps + "\n") #instead of string, for in keys and items, confirm string, key = value f'{key}={value}'
+            f.write(timestamp + "\n") #instead of string, for in keys and items, confirm string, key = value f'{key}={value}'
             
             result = True
 
@@ -221,19 +220,26 @@ def Recall_recovered(file_path):
     result = []
     if p.is_file():
         try:
-            text = p.read_text(encoding="UTF-8")
-            lines = text.splitlines()
-            for l in lines:
-                converted = json.loads(l)
-                result.append(converted)    
+            with open(file_path, "r") as file_object:
+                for line in file_object:
+                    try:
+                        dt_object = datetime.fromisoformat(line.strip())
+                    except ValueError as e:
+                        dt_object = None
+                        print("Not ISO format:", e)
+                    if dt_object:
+                        result.append(line.strip())
+                    
         except SyntaxError:
             raise
         except PermissionError:
             print("PermissionError: Unable to open", file_path)
-        except:
-            print("UNABLE TO LOAD JSON")
+        except ValueError as e:
+            print("UNABLE TO LOAD FILE (Recall):", e)
     else:
         print(f'{type(p)} is not a file')
+        
+    print("ALREADY RECOVERED LIST", result)
     return result
 
 
@@ -349,6 +355,7 @@ def get_user_groups_by_name(user):
     
 def _(s):
     '''Translate incoming string'''
+    print("_ LANGUAGE", LANGUAGE)
     russianStrings = {'Got connection from': 'Получено сообщение от',
                       'Server is listening on': 'Сервер слушает на',
                       'Not recovered': 'Не восстановлено',
@@ -406,18 +413,27 @@ class HttpGetHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         '''Request for recovery'''
+        global LANGUAGE
         content_length = int(self.headers['Content-Length'])
         
         post_data = json.loads(self.rfile.read(content_length).decode())
+        try:
+            LANGUAGE = post_data["language"]
+        except:
+            LANGUAGE = "English"
+            
+        already_recovered = Recall_recovered(RECOVERY_LOG)
+        print("POST LANGUAGE", LANGUAGE)
         print('POST DATA:', post_data)
         recover_line = find_by_timestamp(post_data.get('time'), AUDIT_LOG)
         recovery_result = do_recovery(recover_line)
+        recovery_result["already_recovered"] = already_recovered
         print('RECOVER_LINE:', recover_line)
         print('recovery_result', recovery_result)
         try:
             json_data = json.dumps(recovery_result)
         except Exception:
-            print('UNABLE TO LOAD JSON')
+            print('UNABLE TO LOAD JSON (POST)')
             json_data = {}
             
         print("JSON DATA", json_data)
@@ -437,8 +453,8 @@ def do_recovery(line):
         print("NO TARGETNAME:", line)
     if line.get("operation") == RENAMEAT and line.get("status") == "ok":
         if not line.get("targetname"):
-            rec_status = {"rec_status": "Error",
-                     "info": "targetname is not provided BY THE CLIENT",} #TODO move to child function
+            rec_status = {"rec_status": _("targetname is not provided BY THE CLIENT"),
+                     "info": _("targetname is not provided BY THE CLIENT"),} #TODO move to child function
         else:
             rec_status = Rename(line.get("sourcename"), line.get("targetname"))
 
@@ -447,7 +463,7 @@ def do_recovery(line):
     else:
         print("NO DICTIONARY MATCH")
 
-    Save_recovered(UNDELETER_LOG, line)
+    Save_recovered(RECOVERY_LOG, line["time"])
 
     return rec_status
 
