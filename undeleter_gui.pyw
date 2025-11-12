@@ -17,8 +17,7 @@ from urllib.parse import quote
 
 SERVER = '192.168.76.128' # default entry
 PORT = 999 #lower port for running as root
-LOGO_PATH = "./undeleter_logo.png"
-#RECOVERED_INDEXES = set() 
+LOGO_PATH = "./undeleter_logo.png" 
 FOUND_LINES = [] #Stores result of last search
 RENAMEAT = "renameat" #Realese specific system call for renaming (moving)
 UNLINKAT = "unlinkat" #Realese specific system call for deleting
@@ -78,48 +77,8 @@ def restore_call(restore_timestamp):
     print("CONTENT", content)
     
     return content
-            
 
-# def restore_call(restore_timestamp):
-    # '''Make POST HTTP call to server with timestamp as payload for recovery'''
-    # url = f"http://{server_addr.get().strip()}:{PORT}/recover/"
-    # server_response_obj = urllib.request.Request(url, method='POST')
-    # server_response_obj.add_header('Content-Type', 'application/json')
 
-    # data = {}
-    # data["time"] = restore_timestamp
-    # data_json = json.dumps(data)
-    # data_encoded = data_json.encode()
-    # print("DATA ENCODED", data_encoded)
-    
-    # server_answer = {}
-    # try:
-        # r = urllib.request.urlopen(server_response_obj, data=data_encoded)
-        # #server_response_obj = urllib.request.urlopen(url)
-        # print("THIS IS R", r)
-        # response_content = r.read().decode() 
-        # print("Raw restore response:", response_content)
-        # try:
-            # server_answer = json.loads(response_content)
-            # print("SERVER ANSWER", server_answer)
-        # except json.JSONDecodeError:
-            # raise 
-            # print(f"Restore response was not JSON: {response_content}")
-            # info_text = _("Non-JSON response from server") # Utilising underscore _ function for translation
-            # if r.getcode() != 200: 
-                # info_text = f"{_('Server error code:')} {r.getcode()}"
-            # server_answer = {"status": {"info": info_text, "found_path": response_content}}
-    # except urllib.error.URLError as e:
-        # raise 
-        # print(f"Unable to connect for restore: {e}")
-        # server_answer = {"status": {"info": _("Unable to connect (restore)")}}
-    # #except Exception as e:
-    # #    print(f"Error during restore call: {e}")
-    # #    server_answer = {"status": {"info": str(e)}} 
-        
-    # print("Parsed restore_call response:", server_answer)
-    # return server_answer
-        
 def search(search_name):
     SERVER = server_addr.get().strip() 
     server_addr.pack(side=tk.LEFT, padx=5)
@@ -139,7 +98,7 @@ def search(search_name):
     FOUND_LINES = found_entries.get("found_lines") 
     print("FOUND ENTRIES", type(found_entries), found_entries)
     
-    create_treeview(FOUND_LINES, found_entries.get("already_recovered"))
+    create_treeview(FOUND_LINES)
 
     if found_entries is not None:
         button_restore.config(state=tk.NORMAL)
@@ -201,6 +160,11 @@ def restore():
             info_display_var.set(_("Recovery canceled"))
             return 
 
+    if "forbidden" in current_tags:
+        msg_box = messagebox.showerror(
+            _("Forbidden path"), _("This path can not be recovered. Check back with your administrator")
+        )
+
     button_restore.config(state=tk.DISABLED) 
     info_display_var.set(f"{_('Attempting to restore item from time:')} {to_restore_timestamp}")
     root.update_idletasks()
@@ -208,9 +172,6 @@ def restore():
     server_answer = restore_call(to_restore_timestamp) 
     print(_("Recovery result:"), server_answer)
 
-    #status_info = _("Error") 
-    #found_path_display = ""
-    
     try:
         decoded_answer = server_answer.decode()
         json_loads = json.loads(decoded_answer)
@@ -218,43 +179,14 @@ def restore():
     except:
         raise
         #info_display_var.set("UNKNOWN STATUS")
-        
-    
-    
-    # if isinstance(server_answer, dict) and "status" in server_answer and isinstance(server_answer["status"], dict):
-        # status_info = server_answer["status"].get("info", _("Unknown status"))
-        # found_path = server_answer["status"].get("found_path")
-
-        # if found_path: 
-            # found_path_display = str(found_path)
-
-        # if status_info == "recovered":
-            # info_display_var.set(f"{_('Successfully recovered:')} {found_path_display}")
-            # tv.item(tv_focus_item, tags=("recovered",)) 
-            # tv.tag_configure("recovered", background="light grey")
-            
-            # if FOUND_LINES:
-                # for item_in_found_lines in FOUND_LINES:
-                    # if isinstance(item_in_found_lines, dict) and item_in_found_lines.get('time') == to_restore_timestamp:
-                        # item_in_found_lines['recovered'] = True 
-                        # break
-        # elif status_info == "already_recovered": 
-            # info_display_var.set(f"{_('Item was already recovered:')} {found_path_display}")
-            # tv.item(tv_focus_item, tags=("recovered",)) 
-            # tv.tag_configure("recovered", background="light grey")
-        # else: 
-            # info_display_var.set(f"{_('Recovery failed or status:')} {status_info}. {_('Details:')} {found_path_display}")
-    # else:
-        # info_display_var.set(_("Unknown error or invalid response from server during recovery."))
 
     root.update_idletasks()
 
 
-def create_treeview(data_list, already_recovered):
+def create_treeview(data_list):
     global tv, info_display_var
     
     print("DATA LIST", data_list)
-    print("ALREADY RECOVERED", already_recovered)
     for to_clean_row in tv.get_children():
         tv.delete(to_clean_row)
         
@@ -280,14 +212,6 @@ def create_treeview(data_list, already_recovered):
     print("DATA LIST", type(data_list))
     for i in deepcopy(data_list):
         print("III", i)
-        # if not isinstance(item_orig, dict): 
-            # print(f"Skipping non-dict item in data_list: {item_orig}")
-            # continue
-        # if 'info' in item_orig: 
-            # print(f"Skipping info item in data_list: {item_orig}")
-            # continue
-
-        # i = item_orig.copy()
 
         for k_share, v_share in PATH_TO_SHARE.items():
             if i.get("sourcename", "").startswith(k_share):
@@ -332,19 +256,22 @@ def create_treeview(data_list, already_recovered):
     except Exception as e:
         print(f"Could not sort data by time: {e}")
 
-
     for item_data in data_list_processed: 
         row_values = []
         for key in keys_for_data_extraction: # Extracting values by keys
             row_values.append(item_data.get(key, '')) 
         
         item_tags = []
-        if item_data.get('recovered'): 
+        if item_data.get('is_recovered'):
             item_tags.append("recovered")
-            
+        
+        if item_data.get('is_forbidden'):
+            item_tags.append("forbidden")
+        
         tv.insert('', 'end', values=row_values, tags=tuple(item_tags))
         
     tv.tag_configure("recovered", background="light grey")
+    tv.tag_configure("forbidden", background="IndianRed1")
 
 
 def _(s):
@@ -455,17 +382,14 @@ def _(s):
         "Non-JSON response from server": "Antwort des Servers nicht im JSON-Format",
         "Server error code:": "Server-Fehlercode:",
     }
-    
-    
+
     try:
         if LANGUAGE == 'English' or not LANGUAGE:
             return s
-        elif LANGUAGE == 'Deutsch':
+        if LANGUAGE == 'Deutsch':
             return deutschStrings[s]
-        elif LANGUAGE == 'Russian':
+        if LANGUAGE == 'Russian':
             return russianStrings[s]
-        else:
-            raise ValueError('Invalid language')
     except KeyError:
         print('NO TRANSLATION:', s)
         return f"NT: {s}"
@@ -493,6 +417,7 @@ def change_language(event=None):
     info_display_var.set(_("Ready to work"))
     
     create_treeview(FOUND_LINES)
+
 
 if __name__ == '__main__':
     root = tk.Tk()
