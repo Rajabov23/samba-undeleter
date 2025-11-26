@@ -190,11 +190,11 @@ def create_treeview(data_list):
     for to_clean_row in tv.get_children():
         tv.delete(to_clean_row)
         
-    # if data_list is None: #or not isinstance(data_list, list):
-        # if info_display_var: info_display_var.set(_("Unable to load table data or data is invalid"))
-        # tv["columns"] = []
-        # print("DATA LIST IS NONE")
-        # return
+    if data_list is None: #or not isinstance(data_list, list):
+        if info_display_var: info_display_var.set(_("Unable to load table data or data is invalid"))
+        tv["columns"] = []
+        print("DATA LIST IS NONE")
+        return
         
     default_keys_order = ['sourcename', 'targetname', 'operation', 'client', 'time']
     display_columns_translated = [_ (key) for key in default_keys_order] #Translated column names
@@ -262,12 +262,11 @@ def create_treeview(data_list):
             row_values.append(item_data.get(key, '')) 
         
         item_tags = []
-        if item_data.get('is_recovered'):
-            item_tags.append("recovered")
-        
         if item_data.get('is_forbidden'):
             item_tags.append("forbidden")
-        
+        elif item_data.get('is_recovered'):
+            item_tags.append("recovered")
+       
         tv.insert('', 'end', values=row_values, tags=tuple(item_tags))
         
     tv.tag_configure("recovered", background="light grey")

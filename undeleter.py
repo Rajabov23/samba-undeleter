@@ -41,6 +41,7 @@ def read_log(query, file_name):
     '''Read Samba vfs audit log to search for deleted/moved files/folders'''
     max_index = 7 # 7 is targetname
     parced_lines = []
+    already_recovered = recall_recovered(RECOVERY_LOG)
     with open(file_name, "r", encoding="utf-8") as file:
         for line in file:
             try:
@@ -51,6 +52,7 @@ def read_log(query, file_name):
                 time = prefix.split(" ")[0]
                 #time = datetime.fromisoformat(time)
                 single_line["time"] = time
+                print(single_line.get("time"))
                 single_line["domain"] = domain_and_user[0]
                 single_line["user"] = domain_and_user[2]
                 single_line["client"] = parts[0]
@@ -65,7 +67,12 @@ def read_log(query, file_name):
                     single_line["targetname"] = parts[max_index-1].strip()
                 is_forbidden = is_forbidden_path(single_line.get("sourcename"))
                 single_line["is_forbidden"] = is_forbidden
-
+                if single_line.get("time") in already_recovered:
+                    single_line["is_recovered"] = True
+                    print("TIME IN ALREADY RECOVERED")
+                else:
+                    single_line["is_recovered"] = False
+                    
                 parced_lines.append(single_line)
             except IndexError:
                 continue
@@ -83,6 +90,7 @@ def find_by_timestamp(query, file_name):
     '''Read Samba vfs audit log to search line by provided timestamp'''
     max_index = 7 # 7 is targetname
     recovery_line = {}
+    already_recovered = recall_recovered(RECOVERY_LOG)
     with open(file_name, "r", encoding="utf-8") as file:
         for line in file:
             try:
@@ -107,6 +115,10 @@ def find_by_timestamp(query, file_name):
                     single_line["targetname"] = parts[max_index-1].strip()
                 is_forbidden = is_forbidden_path(single_line.get("sourcename"))
                 single_line["is_forbidden"] = is_forbidden
+                if single_line.get("time") in already_recovered:
+                    single_line["is_recovered"] = True
+                else:
+                    single_line["is_recovered"] = False
 
                 if time == query:
                     recovery_line = single_line
@@ -128,8 +140,7 @@ def recover(original_path_str):
         message = {"rec_status": _("Recovered"),
                    "info": _("Recovered"),
                    "found_path": str(found_path),}
-    #else:
-    #    print("Not found in recycle")
+
     return message
 
 
@@ -152,7 +163,7 @@ def move(original_path, found_path):
     is_success = False
 
     recycle_absolute = pathlib.Path(SHARE_PATH, RECYLCE_DIR)
-    print("RECYCLE ABSOLUT", recycle_absolute)
+    #print("RECYCLE ABSOLUTE", recycle_absolute)
 
     is_deleted = False
     if str(found_path).startswith(str(recycle_absolute)):        
@@ -191,16 +202,7 @@ def Copy_perms(recovered_path):
             print(f"An error occurred: {e}")
 
 
-# def Find_dir(single_dict):
-    # split_path = None
-    # if single_dict.get("sourcename"):
-        # split_path = single_dict.get("sourcename").split("/")
-        # split_path = split_path[-1]
-
-    # return split_path
-
-
-def Save_recovered(file_path, timestamp):
+def save_recovered(file_path, timestamp):
     '''Write recovered entries to a file'''
     try:
         path = pathlib.Path(file_path)
@@ -216,7 +218,7 @@ def Save_recovered(file_path, timestamp):
     return result
     
 
-def Recall_recovered(file_path):
+def recall_recovered(file_path):
     '''Read previously recovered entries from a file'''
     path = pathlib.Path(file_path)
     result = []
@@ -228,7 +230,7 @@ def Recall_recovered(file_path):
                         dt_object = datetime.fromisoformat(line.strip())
                     except ValueError as e:
                         dt_object = None
-                        print("Not ISO format:", e)
+                        #print("Not ISO format:", e)
                     if dt_object:
                         result.append(line.strip())
                     
@@ -241,90 +243,9 @@ def Recall_recovered(file_path):
     else:
         print(f'{type(path)} is not a file')
         
-    print("ALREADY RECOVERED LIST", result)
+    #print("ALREADY RECOVERED LIST", result)
     return result
 
-
-# def is_conn_allowed(addr, out):
-    # """Check if user is allowed to view smbstatus. More than one session is not allowed""" 
-    # is_success = False
-    # if addr and out:
-        # parced = json.loads(out)
-        # if parced.get("sessions"):
-            # all_users = set()
-            # is_auth = False
-            # for k,v in parced["sessions"].items():
-                # uid = v.get("uid")
-                # all_users.add(uid)
-                # #gid = v.get("gid")
-                # remote_host_re = v.get("hostname")
-                # remote_host = re.sub(r'^ipv\d:(.+):\d+$', r'\1', remote_host_re)
-                # name = get_name_by_uid(uid)
-                # is_valid = is_valid_user(name, RECOVER_GROUPS)
-                
-                # if is_valid and (addr == remote_host):
-                    # is_auth = True
-
-            # if is_auth and len(all_users) == 1:
-                # is_success = True
-            # elif is_auth and len(all_users) >= 2:
-                # print('LOGGED IN USERS:', len(all_users))
-                # is_success = True # DESTROY SECURITY TODO
-
-    # return is_success
-
-  
-# def run_smbstatus():
-    # """Get output of smbstatus command"""
-    # message = {"info": None}
-    # out = None
-    # try:
-        # out_raw = subprocess.run(["smbstatus", "-j"], capture_output=True)
-        # out = out_raw.stdout
-    # except FileNotFoundError:
-        # message = {"info": _("smbstatus not found on server")}
-    # except Exception as e:
-        # print("EXCEPTION", e)
-    
-    # return out
-
-
-# def is_valid_user(user, recover_groups):
-    # """Check if fullname user is a member of valid groups"""
-    # user_groups = get_user_groups_by_name(user)
-    # is_valid = False
-    # for i in recover_groups:
-        # if i in user_groups:
-            # is_valid = True
-            # break
-    # return is_valid
-    
-
-# def get_sid_by_name(name):
-    # """ged SID from full username"""
-    # out = subprocess.run(["wbinfo", "-n", name], capture_output=True)
-    # sid = out.stdout
-    # sid = sid.split()
-    # if sid:
-        # sid = sid[0].decode("utf-8")
-    # else:
-        # sid = None
-    # return sid
-
-
-# def get_name_by_uid(uid):
-    # """get fullname from numeric UID"""
-    # uid = str(uid) #from int
-    # out = subprocess.run(["wbinfo", "-U", uid], capture_output=True)
-    # sid = out.stdout.strip()    
-    # name_out = subprocess.run(["wbinfo", "-s", sid], capture_output=True)
-    # name = name_out.stdout.split()
-    # if name:
-        # name = name[0].decode("utf-8")
-    # else:
-        # name = None
-    # return name
-    
 
 def get_user_groups_by_name(user):
     """find user groups as list by full user name"""
@@ -342,10 +263,10 @@ def get_user_groups_by_name(user):
                 group = re.sub(regex, "", group)
                 groups.append(group)           
     return groups
-    
-    
+
+
 def _(s):
-    '''Translate incoming string'''
+    """Translate incoming string"""
     print("_ LANGUAGE", LANGUAGE)
     russian_strings = {'Got connection from': 'Получено сообщение от',
                       'Server is listening on': 'Сервер слушает на',
@@ -381,16 +302,8 @@ class HttpGetHandler(BaseHTTPRequestHandler):
         '''Request for search'''
         decoded_url = unquote(self.path)
         print(decoded_url)
-        
-        already_recovered = Recall_recovered(RECOVERY_LOG)
         client_message = decoded_url.removeprefix('/search/')
-        found_lines = read_log(client_message, AUDIT_LOG)
-        for index, d in enumerate(found_lines[:]):
-            if d.get("time") in already_recovered:
-                d["is_recovered"] = True
-                found_lines[index] = d
-                #print("ALREADY_RECOVERED", d)
-                
+        found_lines = read_log(client_message, AUDIT_LOG)  
         print("FOUND LINES", found_lines)
         print('GET MSG:', client_message)
         #print(self.client_address)
@@ -450,14 +363,12 @@ def is_forbidden_path(path):
     path = pathlib.Path(path)
     for i in FORBIDDEN_DIRS:
         forbidden_dir = pathlib.Path(i)
-        #print("FORBIDDEN_DIR", forbidden_dir, path)
-        if forbidden_dir in path.parents:
-            #print(path, "is a subset of", forbidden_dir)
+        if forbidden_dir in path.parents or forbidden_dir == path:
             return True
     
     return False    
-   
-   
+
+
 def do_recovery(line):
     '''Move deleted or renamed files and folders to original destinations'''
     if line.get("operation") == RENAMEAT and not line.get("targetname"):
@@ -474,7 +385,7 @@ def do_recovery(line):
     else:
         print("NO DICTIONARY MATCH")
 
-    Save_recovered(RECOVERY_LOG, line["time"])
+    save_recovered(RECOVERY_LOG, line["time"])
 
     return rec_status
 

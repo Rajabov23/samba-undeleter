@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+# -*- coding: utf8 -*-
+
+import unittest
+from undeleter import *
+from unittest.mock import patch, mock_open
+import pathlib
+import string
+import random
+
+TEST_DIR = "/tmp/undeleter_tests"
+MODE = 0o775 
+
+if 'unittest.util' in __import__('sys').modules:
+    # Show full diff in self.assertEqual.
+    __import__('sys').modules['unittest.util']._MAX_LENGTH = 999999999
+
+
+class RmTestCase(unittest.TestCase):
+
+    audit_log_content = r'''2025-04-28T19:30:44.799995+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/Новая папка|/srv/public/dir
+2025-04-28T19:30:49.417506+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/dir/Лист Microsoft Excel.xlsx|/srv/public/dir/2.xlsx
+2025-04-28T19:30:58.102980+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/dir/2.xlsx|/srv/public/.recycle/2/2.xlsx
+2025-04-28T19:30:58.117605+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/dir'''
+
+
+    random_dir = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(8))
+    #print("random", random_dir)
+    test_dir = pathlib.Path(TEST_DIR)
+    test_dir.mkdir(parents=True, exist_ok=True)
+    temp_dir = pathlib.Path(pathlib.PurePath(test_dir, random_dir))
+    temp_dir.mkdir(parents=True)
+    #print("TEMP DIR",temp_dir)
+    samba_dir = pathlib.Path(f'{temp_dir}/samba/')
+    samba_dir.mkdir(parents=True, exist_ok=True)
+    audit_log = f'{temp_dir}/samba/audit.log'
+    recovered_path = pathlib.Path(f"{temp_dir}/undeleter_recovered.log")
+    recovered_contents = ["2025-11-12T20:00:03.446986+03:00", "2025-11-12T19:58:30.332536+03:00", "2025-11-26T18:46:32.409712+03:00"]
+
+
+    def setUp(self):
+        self.maxDiff = None
+        one = pathlib.Path(f"{self.temp_dir}/1")
+        two = pathlib.Path(f"{self.temp_dir}/2")
+        self.deleted = pathlib.Path(f"{self.temp_dir}/.recycle/deleted")
+        recycle = pathlib.Path(f"{self.temp_dir}/.recycle")
+        file_share = pathlib.Path(f"{self.temp_dir}")
+        renamed = pathlib.Path(f"{self.temp_dir}/dir/ren_dir")
+
+        one.mkdir(parents=True, exist_ok=True)
+        two.mkdir(parents=True, exist_ok=True)
+        self.deleted.mkdir(parents=True, exist_ok=True)
+        recycle.mkdir(parents=True, exist_ok=True)
+        renamed.mkdir(parents=True, exist_ok=True)
+        file_share.mkdir(parents=True, exist_ok=True)
+        self.deleted.chmod(0o333)
+        recycle.chmod(0o333)
+        
+        with open(self.audit_log, "w", encoding ="utf-8") as f:
+            f.write(self.audit_log_content)
+        
+
+    def test_rename(self):
+        self.assertTrue(rename(f"{self.temp_dir}/ren_dir", f"{self.temp_dir}/dir/ren_dir"))
+        self.assertEqual(rename(f"{self.temp_dir}/ren_dir", f"{self.temp_dir}/dir/nonexistant"),  {'info': 'Not renamed', 'rec_status': 'Not renamed'})
+        renamed = pathlib.Path(f"{self.temp_dir}/dir/ren_dir")
+        renamed.mkdir(parents=True, exist_ok=True)
+        #self.assertEqual(rename(f"{self.temp_dir}/ren_dir", f"{self.temp_dir}/dir/ren_dir"),  {'info': 'Not renamed', 'rec_status': 'Not renamed'})
+        
+    
+    def test_recover(self):        
+        self.assertTrue(recover(f"{self.temp_dir}/deleted"))
+        if not self.deleted:
+            raise Exception("still present at recycle")
+        self.assertEqual(recover(f"{self.temp_dir}/nonexistant"),  {'info': 'Not recovered', 'rec_status': 'Not recovered'})
+        self.assertEqual(recover(f"{self.temp_dir}/not_in_recycle"), {'info': 'Not recovered', 'rec_status': 'Not recovered'})
+        
+
+    def test_read_log(self): 
+        #result = [
+#{'time': '2024-01-25 16:34:15', 'domain': "", 'user': 'ghost', 'client': '192.168.76.1', 'share': '/srv/public', 'operation': 'renameat', 'status': 'ok', 'sourcename': '/srv/public/ren_dir', 'targetname': '/srv/public/6/ren_dir'}, 
+#{'time': '2024-01-25 16:58:09', 'domain': "", 'user': 'ghost', 'client': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/ren_dir'},
+#{'client': '192.168.76.1', 'domain': "", 'operation': 'renameat', 'share': '/srv/public', 'sourcename': '/srv/public/ren_dir', 'status': 'ok', 'targetname': '/srv/public/6/ren_dir',   'time': '2024-02-08 18:55:52',   'user': 'ghost'},
+#{'client': '192.168.76.1', 'domain': "", 'operation': 'unlinkat', 'share': '/srv/public', 'sourcename': '/srv/public/ren_dir', 'status': 'ok', 'time': '2024-07-02 16:52:47', 'user': 'ghost'}]
+
+#       self.assertEqual(read_log("ren_dir", self.audit_log), result)
+        
+        result_deleted = [
+{'client': '192.168.76.1', 'domain': "UNDELETER",'ip': "192.168.76.1", 'is_forbidden': False, 'is_recovered': False, 'operation': 'unlinkat', 'share': '/srv/public', 'sourcename': '/srv/public/dir', 'status': 'ok', 'time': '2025-04-28T19:30:58.117605+03:00', 'user': 'user1'}
+        ]
+        self.assertEqual(read_log("dir", self.audit_log), result_deleted)    
+
+
+    def test_Remember_and_recall(self):
+        is_remembered = save_recovered(self.recovered_path, "2025-11-12T20:00:03.446986+03:00")
+        save_recovered(self.recovered_path, "2025-11-12T19:58:30.332536+03:00")
+        save_recovered(self.recovered_path, "2025-11-26T18:46:32.409712+03:00")
+        self.assertTrue(is_remembered)
+        print("REMEBER RECOVERD: ", is_remembered)
+        print("REMEMBER", self.recovered_path)
+
+        self.assertEqual(recall_recovered(self.recovered_path), self.recovered_contents)
+   
+
+    # def test_get_user_groups_by_name(self):
+        # '''works on my machine ¯\_(ツ)_/¯'''
+        # self.assertEqual(get_user_groups_by_name('UNDELETER\\user1'), ['users', 'user1', 'teachers', 'users'])
+        # self.assertEqual(get_user_groups_by_name('UNDELETER\\user2'), ['users', 'user2', 'users'])
+        # self.assertEqual(get_user_groups_by_name('UNDELETER\\Administrator'), ['root', 'users','enterprise admins', 'domain admins', 'schema admins', 'group policy creator owners', 'denied rodc password replication group', 'users', 'administrators'])
+        # self.assertNotEqual(get_user_groups_by_name('UNDELETER\\user2'), [])
+        # self.assertNotEqual(get_user_groups_by_name('UNDELETER\\user1'), [])
+        # self.assertNotEqual(get_user_groups_by_name('UNDELETER\\Administrator'), [])
+        
+        # self.assertEqual(get_user_groups_by_name('UNDELETER\\пользователь1'), ['users', 'пользователь1', 'teachers', 'users'])
+        # self.assertEqual(get_user_groups_by_name('UNDELETER\\пользователь2'), ['users', 'пользователь2', 'users'])
+
+        # self.assertEqual(get_user_groups_by_name('user1'), ['users', 'user1', 'teachers', 'users'])
+        # self.assertEqual(get_user_groups_by_name('user2'), ['users', 'user2', 'users'])
+        # self.assertEqual(get_user_groups_by_name('Administrator'), ['root', 'users','enterprise admins', 'domain admins', 'schema admins', 'group policy creator owners', 'denied rodc password replication group', 'users', 'administrators'])
+        # self.assertNotEqual(get_user_groups_by_name('user2'), [])
+        # self.assertNotEqual(get_user_groups_by_name('user1'), [])
+        # self.assertNotEqual(get_user_groups_by_name('Administrator'), [])
+        
+        # self.assertEqual(get_user_groups_by_name('пользователь1'), ['users', 'пользователь1', 'teachers', 'users'])
+        # self.assertEqual(get_user_groups_by_name('пользователь2'), ['users', 'пользователь2', 'users'])
+        
+        # self.assertEqual(get_user_groups_by_name('NOTEXIST'), [])
+        # self.assertEqual(get_user_groups_by_name('UNDELETER\\NOTEXIST'), [])
+        
+        
+    # def test_get_sid_by_name(self):
+        # self.assertEqual(get_sid_by_name('UNDELETER\\user1'), "S-1-5-21-933126593-2266183401-1585322145-1104")
+        # self.assertEqual(get_sid_by_name('UNDELETER\\user2'), "S-1-5-21-933126593-2266183401-1585322145-1106")
+        # self.assertEqual(get_sid_by_name('UNDELETER\\пользователь1'), "S-1-5-21-933126593-2266183401-1585322145-1107")
+        # self.assertEqual(get_sid_by_name('UNDELETER\\Administrator'), "S-1-5-21-933126593-2266183401-1585322145-500")
+        
+        # self.assertEqual(get_sid_by_name('user1'), "S-1-5-21-933126593-2266183401-1585322145-1104")
+        # self.assertEqual(get_sid_by_name('user2'), "S-1-5-21-933126593-2266183401-1585322145-1106")
+        # self.assertEqual(get_sid_by_name('пользователь1'), "S-1-5-21-933126593-2266183401-1585322145-1107")
+        # self.assertEqual(get_sid_by_name('Administrator'), "S-1-5-21-933126593-2266183401-1585322145-500")
+        
+        # self.assertIsNone(get_sid_by_name('NOTEXIST'))
+        # self.assertIsNone(get_sid_by_name('UNDELETER\\NOTEXIST'))
+        
+
+    # def test_get_name_by_uid(self):
+        # self.assertEqual(get_name_by_uid('3000019'), "UNDELETER\\user1")
+        # self.assertEqual(get_name_by_uid('0'), "UNDELETER\\Administrator")
+        # self.assertEqual(get_name_by_uid('3000023'), "UNDELETER\\пользователь1")   
+        # self.assertIsNone(get_name_by_uid('8888888')) # Non existant user 
+    
+    
+    # def test_is_valid_user(self):
+        # self.assertTrue(is_valid_user('UNDELETER\\user1', RECOVER_GROUPS))
+        # self.assertFalse(is_valid_user('UNDELETER\\user2', RECOVER_GROUPS))
+        # self.assertFalse(is_valid_user('UNDELETER\\Administrator', RECOVER_GROUPS))
+        # self.assertFalse(is_valid_user('UNDELETER\\NOTEXIST', RECOVER_GROUPS))
+        
+        # self.assertTrue(is_valid_user('user1', RECOVER_GROUPS))
+        # self.assertFalse(is_valid_user('user2', RECOVER_GROUPS))
+        # self.assertFalse(is_valid_user('Administrator', RECOVER_GROUPS))
+        # self.assertFalse(is_valid_user('NOTEXIST', RECOVER_GROUPS))
+
+
+    # def test_is_conn_allowed(self):
+        # correct_address1 = "192.168.76.129"
+        # input1 = b'{"timestamp": "2024-12-13T16:09:56.462554+0300", "version": "4.17.12-Debian", "smb_conf": "/etc/samba/smb.conf", "sessions": {"3509269828": {"session_id": "3509269828", "server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "uid": 3000019, "gid": 100, "username": "UNDELETER\\\\user1", "groupname": "users", "remote_machine": "192.168.76.129", "hostname": "ipv4:192.168.76.129:62177", "session_dialect": "SMB3_02", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "partial"}}}, "tcons": {"3246703567": {"service": "public", "server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "tcon_id": "3246703567", "session_id": "3509269828", "machine": "192.168.76.129", "connected_at": "2024-12-13T15:24:09.297009+03:00", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "full"}}}, "open_files": {"/srv/public/.": {"service_path": "/srv/public", "filename": ".", "fileid": {"devid": 2049, "inode": 48, "extid": 0}, "num_pending_deletes": 0, "opens": {"1448/15": {"server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "uid": 3000019, "share_file_id": "15", "sharemode": {"hex": "0x00000007", "READ": true, "WRITE": true, "DELETE": true, "text": "RWD"}, "access_mask": {"hex": "0x00100081", "READ_DATA": true, "WRITE_DATA": false, "APPEND_DATA": false, "READ_EA": false, "WRITE_EA": false, "EXECUTE": false, "READ_ATTRIBUTES": true, "WRITE_ATTRIBUTES": false, "DELETE_CHILD": false, "DELETE": false, "READ_CONTROL": false, "WRITE_DAC": false, "SYNCHRONIZE": true, "ACCESS_SYSTEM_SECURITY": false, "text": "R"}, "caching": {"READ": false, "WRITE": false, "HANDLE": false, "hex": "0x00000000", "text": ""}, "oplock": {}, "lease": {}, "opened_at": "2024-12-13T15:24:58.892958+03:00"}}}}}\n'
+        # incorrect_address1 = "10.0.0.99"
+        # input_no_sessions = b'{"timestamp": "2024-12-13T16:09:56.462554+0300", "version": "4.17.12-Debian", "smb_conf": "/etc/samba/smb.conf", "tcons": {"3246703567": {"service": "public", "server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "tcon_id": "3246703567", "session_id": "3509269828", "machine": "192.168.76.129", "connected_at": "2024-12-13T15:24:09.297009+03:00", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "full"}}}, "open_files": {"/srv/public/.": {"service_path": "/srv/public", "filename": ".", "fileid": {"devid": 2049, "inode": 48, "extid": 0}, "num_pending_deletes": 0, "opens": {"1448/15": {"server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "uid": 3000019, "share_file_id": "15", "sharemode": {"hex": "0x00000007", "READ": true, "WRITE": true, "DELETE": true, "text": "RWD"}, "access_mask": {"hex": "0x00100081", "READ_DATA": true, "WRITE_DATA": false, "APPEND_DATA": false, "READ_EA": false, "WRITE_EA": false, "EXECUTE": false, "READ_ATTRIBUTES": true, "WRITE_ATTRIBUTES": false, "DELETE_CHILD": false, "DELETE": false, "READ_CONTROL": false, "WRITE_DAC": false, "SYNCHRONIZE": true, "ACCESS_SYSTEM_SECURITY": false, "text": "R"}, "caching": {"READ": false, "WRITE": false, "HANDLE": false, "hex": "0x00000000", "text": ""}, "oplock": {}, "lease": {}, "opened_at": "2024-12-13T15:24:58.892958+03:00"}}}}}\n'
+        # input_two_users =  b'{"timestamp": "2024-12-13T16:29:13.111720+0300", "version": "4.17.12-Debian", "smb_conf": "/etc/samba/smb.conf", "sessions": {"3621540950": {"session_id": "3621540950", "server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "uid": 3000022, "gid": 100, "username": "UNDELETER\\\\user2", "groupname": "users", "remote_machine": "192.168.76.129", "hostname": "ipv4:192.168.76.129:62177", "session_dialect": "SMB3_02", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "partial"}}, "831862558": {"session_id": "831862558", "server_id": {"pid": "2501", "task_id": "0", "vnn": "4294967295", "unique_id": "448565975986327350"}, "uid": 3000022, "gid": 100, "username": "UNDELETER\\\\user2", "groupname": "users", "remote_machine": "192.168.76.129", "hostname": "ipv4:192.168.76.129:53235", "session_dialect": "SMB3_02", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "full"}}, "3509269828": {"session_id": "3509269828", "server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "uid": 3000019, "gid": 100, "username": "UNDELETER\\\\user1", "groupname": "users", "remote_machine": "192.168.76.129", "hostname": "ipv4:192.168.76.129:62177", "session_dialect": "SMB3_02", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "partial"}}}, "tcons": {"2612426645": {"service": "public", "server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "tcon_id": "2612426645", "session_id": "3621540950", "machine": "192.168.76.129", "connected_at": "2024-12-13T16:28:09.478701+03:00", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "full"}}, "3246703567": {"service": "public", "server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "tcon_id": "3246703567", "session_id": "3509269828", "machine": "192.168.76.129", "connected_at": "2024-12-13T15:24:09.297009+03:00", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "full"}}, "3762259073": {"service": "IPC$", "server_id": {"pid": "2501", "task_id": "0", "vnn": "4294967295", "unique_id": "448565975986327350"}, "tcon_id": "3762259073", "session_id": "831862558", "machine": "192.168.76.129", "connected_at": "2024-12-13T16:29:10.066829+03:00", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "full"}}}, "open_files": {"/srv/public/.": {"service_path": "/srv/public", "filename": ".", "fileid": {"devid": 2049, "inode": 48, "extid": 0}, "num_pending_deletes": 0, "opens": {"1448/1257": {"server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "uid": 3000022, "share_file_id": "1257", "sharemode": {"hex": "0x00000007", "READ": true, "WRITE": true, "DELETE": true, "text": "RWD"}, "access_mask": {"hex": "0x00100081", "READ_DATA": true, "WRITE_DATA": false, "APPEND_DATA": false, "READ_EA": false, "WRITE_EA": false, "EXECUTE": false, "READ_ATTRIBUTES": true, "WRITE_ATTRIBUTES": false, "DELETE_CHILD": false, "DELETE": false, "READ_CONTROL": false, "WRITE_DAC": false, "SYNCHRONIZE": true, "ACCESS_SYSTEM_SECURITY": false, "text": "R"}, "caching": {"READ": false, "WRITE": false, "HANDLE": false, "hex": "0x00000000", "text": ""}, "oplock": {}, "lease": {}, "opened_at": "2024-12-13T16:28:51.331854+03:00"}, "1448/15": {"server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "uid": 3000019, "share_file_id": "15", "sharemode": {"hex": "0x00000007", "READ": true, "WRITE": true, "DELETE": true, "text": "RWD"}, "access_mask": {"hex": "0x00100081", "READ_DATA": true, "WRITE_DATA": false, "APPEND_DATA": false, "READ_EA": false, "WRITE_EA": false, "EXECUTE": false, "READ_ATTRIBUTES": true, "WRITE_ATTRIBUTES": false, "DELETE_CHILD": false, "DELETE": false, "READ_CONTROL": false, "WRITE_DAC": false, "SYNCHRONIZE": true, "ACCESS_SYSTEM_SECURITY": false, "text": "R"}, "caching": {"READ": false, "WRITE": false, "HANDLE": false, "hex": "0x00000000", "text": ""}, "oplock": {}, "lease": {}, "opened_at": "2024-12-13T15:24:58.892958+03:00"}}}}}\n'
+        
+        # self.assertTrue(is_conn_allowed(correct_address1, input1))
+        # self.assertFalse(is_conn_allowed(incorrect_address1, input1))
+        
+        # self.assertFalse(is_conn_allowed(None, input1))
+        # self.assertFalse(is_conn_allowed(correct_address1, None))
+        # self.assertFalse(is_conn_allowed(None, None))
+        
+        # self.assertFalse(is_conn_allowed(correct_address1, input_no_sessions))
+        # self.assertFalse(is_conn_allowed(correct_address1, input_two_users))
+
+
+if __name__ == '__main__':
+    unittest.main(exit=False)
+    
