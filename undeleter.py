@@ -28,13 +28,13 @@ HOST = '0.0.0.0'
 PORT = 999
 AUDIT_LOG = "/var/log/samba/audit.log"
 RECOVERY_LOG = "/var/log/samba/undeleter_recovered.log"
-RECOVER_GROUPS = ["teachers"]
-SHARE_PATH = "/srv/public"
-RECYLCE_DIR = ".recycle"
+#RECOVER_GROUPS = ["teachers"]
+SHARE_DIR = "/storage/public"
+RECYCLE_DIR = ".recycle"
 LANGUAGE = "English" #fallback language
 RENAMEAT = "renameat"
 UNLINKAT = "unlinkat"
-FORBIDDEN_DIRS = ["/srv/public/forb1", "/srv/public/forb2"]
+FORBIDDEN_DIRS = ["/srv/public/forbidden1", "/srv/public/forbidden2"]
 
 
 def read_log(query, file_name):
@@ -52,7 +52,7 @@ def read_log(query, file_name):
                 time = prefix.split(" ")[0]
                 #time = datetime.fromisoformat(time)
                 single_line["time"] = time
-                print(single_line.get("time"))
+                #print(single_line.get("time"))
                 single_line["domain"] = domain_and_user[0]
                 single_line["user"] = domain_and_user[2]
                 single_line["client"] = parts[0]
@@ -129,31 +129,45 @@ def find_by_timestamp(query, file_name):
     return recovery_line
 
 
-def recover(original_path_str):
+def recover(original_path_str, share_dir_):  # TODO: supply config
     '''Try to recover(move) file from recycle directory'''
-    message = {"rec_status": _("Not recovered"), "info": _("Not recovered")}
+    message = {"rec_status": _("Not recovered"), "info": _("Unknown reason")}
     original_path = pathlib.Path(original_path_str)
-    deleted_dir = original_path_str.removeprefix(SHARE_PATH).removeprefix('/')
-    found_path = pathlib.Path(pathlib.Path(SHARE_PATH), pathlib.Path(RECYLCE_DIR), pathlib.Path(deleted_dir))
-    is_success = move(original_path, found_path)
-    if is_success:
-        message = {"rec_status": _("Recovered"),
-                   "info": _("Recovered"),
-                   "found_path": str(found_path),}
+    recycle_path = pathlib.Path(share_dir_, RECYCLE_DIR)
+    relative_path = original_path_str.removeprefix(str(share_dir_)).removeprefix('/')
+    real_path = pathlib.Path(recycle_path, relative_path)
 
+    if real_path.exists():
+        is_success = move(original_path, real_path)
+        if is_success:
+            message = {"rec_status": _("Recovered"),
+                       "info": _("Recovered"),
+                       "found_path": str(real_path)}
+    else:
+            message = {"rec_status": _("Not recovered"), "info": f"'{str(real_path)}' {_('does not exist')}"}
+
+#    print('recycle_path     ', recycle_path)
+#    print('relative_path    ', relative_path)
+#    print('moving from', real_path)
+#    print('moving to  ', original_path_str)
     return message
 
 
 def rename(original_path_str, found_path_str):
     '''Try to rename(move) accidentally missplaced file from another directory'''
-    message = {"rec_status": _("Not renamed"), "info": _("Not renamed")}
+    message = {"rec_status": _("Not renamed"), "info": _("Unknown reason")}
     original_path = pathlib.Path(original_path_str)
     found_path = pathlib.Path(found_path_str)
-    is_success = move(original_path, found_path)
-    if is_success:
-        message = {"rec_status": _("Renamed"),
-                   "info": _("Renamed"),
-                   "found_path": str(found_path),}
+
+    if not found_path.exists():
+        message = {"rec_status": _("Not renamed"),
+                   "info": f"'{found_path_str}' {_('does not exist')}"}
+    else:
+        is_success = move(original_path, found_path)
+        if is_success:
+            message = {"rec_status": _("Renamed"),
+                       "info": _("Renamed"),
+                       "found_path": str(found_path),}
 
     return message
 
@@ -162,7 +176,9 @@ def move(original_path, found_path):
     '''Agnostic file/dir mover''' 
     is_success = False
 
-    recycle_absolute = pathlib.Path(SHARE_PATH, RECYLCE_DIR)
+#    print('moving from', found_path)
+#    print('moving to  ', original_path)
+    recycle_absolute = pathlib.Path(SHARE_DIR, RECYCLE_DIR)
     #print("RECYCLE ABSOLUTE", recycle_absolute)
 
     is_deleted = False
@@ -184,13 +200,15 @@ def move(original_path, found_path):
             if is_deleted:
                 Copy_perms(new_original_path)
             is_success = True
+    else:
+        print(f'{found_path} does not exists')
 
     return is_success
 
 
 def Copy_perms(recovered_path):
-    '''Read permissions from share root(SHARE_PATH) and apply to recovered directory'''
-    reference_path = pathlib.Path(SHARE_PATH)
+    '''Read permissions from share root(SHARE_DIR) and apply to recovered directory'''
+    reference_path = pathlib.Path(SHARE_DIR)
     shutil.copystat(reference_path, recovered_path)
 
     for path in recovered_path.rglob("*"):
@@ -267,14 +285,15 @@ def get_user_groups_by_name(user):
 
 def _(s):
     """Translate incoming string"""
-    print("_ LANGUAGE", LANGUAGE)
+#    print("_ LANGUAGE", LANGUAGE)
     russian_strings = {'Got connection from': 'Получено сообщение от',
                       'Server is listening on': 'Сервер слушает на',
                       'Not recovered': 'Не восстановлено',
                       'Recovered': 'Восстановлено',
                       'Not renamed': 'Не переименовано',
                       'Renamed': 'Переименовано',
-                      'smbstatus not found on server': 'smbstatus не найден на сервере',
+                      'does not exist': 'не существует',
+                      'Unknown reason': 'Неизвестная причина',
                      }
     deutsch_strings = {'Got connection from': 'Verbindung hergestellt von',
                       'Server is listening on': 'der Server hört auf',
@@ -282,7 +301,8 @@ def _(s):
                       'Recovered': 'Wiederhergestellt',
                       'Not renamed': 'Nicht umbenannt',
                       'Renamed': 'Umbenannt',
-                      'smbstatus not found on server': 'smbstatus auf dem Server nicht gefunden',
+                      'does not exist': '...',  # TODO
+                      'Unknown reason': '...',  # TODO
                      }
 
     try:
@@ -331,7 +351,6 @@ class HttpGetHandler(BaseHTTPRequestHandler):
         except KeyError:
             LANGUAGE = "English"
             
-        print("POST LANGUAGE", LANGUAGE)
         print('POST DATA:', post_data)
         recover_line = find_by_timestamp(post_data.get('time'), AUDIT_LOG)
         if not recover_line.get("is_forbidden"):
@@ -381,7 +400,7 @@ def do_recovery(line):
             rec_status = rename(line.get("sourcename"), line.get("targetname"))
 
     elif line.get("operation") == UNLINKAT and line.get("status") == "ok":
-        rec_status = recover(line.get("sourcename"))
+        rec_status = recover(line.get("sourcename"), SHARE_DIR)
     else:
         print("NO DICTIONARY MATCH")
 
@@ -437,8 +456,8 @@ if __name__ == '__main__':
     if not args.unsecure:
         fail_if_not_confined(pathlib.Path(sys.argv[0]).stem)
     
-    if not pathlib.Path(SHARE_PATH).exists():
-        raise EnvironmentError("No such share:", SHARE_PATH)
+    if not pathlib.Path(SHARE_DIR).exists():
+        raise EnvironmentError("No such share:", SHARE_DIR)
     
     Listen()
     
