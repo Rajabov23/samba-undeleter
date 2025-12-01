@@ -102,7 +102,7 @@ def search(search_name):
 
     if found_entries is not None:
         button_restore.config(state=tk.NORMAL)
-        info_display_var.set(f"{_('Search finished. Found entries:')} {len(found_entries.get("found_lines"))}")
+        info_display_var.set(f"{_('Search finished. Found entries:')} {len(found_entries.get('found_lines'))}")
     else:
         info_display_var.set(_("Search error"))
     root.update_idletasks()
@@ -518,3 +518,4 @@ if __name__ == '__main__':
     create_treeview([])
 
     root.mainloop()
+

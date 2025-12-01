@@ -8,8 +8,7 @@ import pathlib
 import string
 import random
 
-TEST_DIR = "/tmp/undeleter_tests"
-MODE = 0o775 
+RECYCLE_MODE = 0o333
 
 if 'unittest.util' in __import__('sys').modules:
     # Show full diff in self.assertEqual.
@@ -18,72 +17,90 @@ if 'unittest.util' in __import__('sys').modules:
 
 class RmTestCase(unittest.TestCase):
 
-    audit_log_content = r'''2025-04-28T19:30:44.799995+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/Новая папка|/srv/public/dir
-2025-04-28T19:30:49.417506+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/dir/Лист Microsoft Excel.xlsx|/srv/public/dir/2.xlsx
-2025-04-28T19:30:58.102980+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/dir/2.xlsx|/srv/public/.recycle/2/2.xlsx
-2025-04-28T19:30:58.117605+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/dir'''
-
-
-    random_dir = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(8))
-    #print("random", random_dir)
-    test_dir = pathlib.Path(TEST_DIR)
+    test_path = "/tmp/undeleter_tests"
+    #print("temp dir", temp_dir)
+    random_name = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(8))
+    #print("random", random_name)
+    test_dir = pathlib.Path(test_path)
     test_dir.mkdir(parents=True, exist_ok=True)
-    temp_dir = pathlib.Path(pathlib.PurePath(test_dir, random_dir))
-    temp_dir.mkdir(parents=True)
-    #print("TEMP DIR",temp_dir)
+    temp_dir = pathlib.Path(pathlib.PurePath(test_dir, random_name))
+    temp_dir.mkdir(parents=True, exist_ok=True)
     samba_dir = pathlib.Path(f'{temp_dir}/samba/')
     samba_dir.mkdir(parents=True, exist_ok=True)
-    audit_log = f'{temp_dir}/samba/audit.log'
-    recovered_path = pathlib.Path(f"{temp_dir}/undeleter_recovered.log")
-    recovered_contents = ["2025-11-12T20:00:03.446986+03:00", "2025-11-12T19:58:30.332536+03:00", "2025-11-26T18:46:32.409712+03:00"]
 
 
     def setUp(self):
         self.maxDiff = None
-        one = pathlib.Path(f"{self.temp_dir}/1")
-        two = pathlib.Path(f"{self.temp_dir}/2")
-        self.deleted = pathlib.Path(f"{self.temp_dir}/.recycle/deleted")
-        recycle = pathlib.Path(f"{self.temp_dir}/.recycle")
-        file_share = pathlib.Path(f"{self.temp_dir}")
-        renamed = pathlib.Path(f"{self.temp_dir}/dir/ren_dir")
+        self.file_share = pathlib.Path(f"{self.temp_dir}")
+        self.audit_log_contents = r'''2025-04-28T19:30:44.799995+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/Новая папка|/srv/public/dir
+2025-04-28T19:30:49.417506+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/dir/Лист Microsoft Excel.xlsx|/srv/public/dir/2.xlsx
+2025-04-28T19:30:58.102980+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/dir/2.xlsx|/srv/public/.recycle/2/2.xlsx
+2025-04-28T19:30:58.117605+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/dir'''
 
-        one.mkdir(parents=True, exist_ok=True)
-        two.mkdir(parents=True, exist_ok=True)
-        self.deleted.mkdir(parents=True, exist_ok=True)
-        recycle.mkdir(parents=True, exist_ok=True)
-        renamed.mkdir(parents=True, exist_ok=True)
-        file_share.mkdir(parents=True, exist_ok=True)
-        self.deleted.chmod(0o333)
-        recycle.chmod(0o333)
+        self.audit_log = f'{self.file_share}/samba/audit.log'
+        self.recovered_path = pathlib.Path(f"{self.file_share}/samba/undeleter_recovered.log")
+#        one = pathlib.Path(f"{self.file_share}/1")
+#        two = pathlib.Path(f"{self.file_share}/2")
+        self.recycle = pathlib.Path(f"{self.file_share}/{RECYCLE_DIR}")
+        self.file_share.mkdir(parents=True, exist_ok=True)
+#        one.mkdir(parents=True, exist_ok=True)
+#        two.mkdir(parents=True, exist_ok=True)
+        self.recycle.mkdir(parents=True, exist_ok=True)
+        self.recycle.chmod(RECYCLE_MODE)  # mimic actual recycle dir
         
         with open(self.audit_log, "w", encoding ="utf-8") as f:
-            f.write(self.audit_log_content)
-        
+            f.write(self.audit_log_contents)
+
 
     def test_rename(self):
-        self.assertTrue(rename(f"{self.temp_dir}/ren_dir", f"{self.temp_dir}/dir/ren_dir"))
-        self.assertEqual(rename(f"{self.temp_dir}/ren_dir", f"{self.temp_dir}/dir/nonexistant"),  {'info': 'Not renamed', 'rec_status': 'Not renamed'})
-        renamed = pathlib.Path(f"{self.temp_dir}/dir/ren_dir")
-        renamed.mkdir(parents=True, exist_ok=True)
-        #self.assertEqual(rename(f"{self.temp_dir}/ren_dir", f"{self.temp_dir}/dir/ren_dir"),  {'info': 'Not renamed', 'rec_status': 'Not renamed'})
-        
-    
-    def test_recover(self):        
-        self.assertTrue(recover(f"{self.temp_dir}/deleted"))
-        if not self.deleted:
-            raise Exception("still present at recycle")
-        self.assertEqual(recover(f"{self.temp_dir}/nonexistant"),  {'info': 'Not recovered', 'rec_status': 'Not recovered'})
-        self.assertEqual(recover(f"{self.temp_dir}/not_in_recycle"), {'info': 'Not recovered', 'rec_status': 'Not recovered'})
-        
+        renamed_dir = pathlib.Path(f"{self.file_share}/moved_to/ren_dir")
+        renamed_dir.mkdir(parents=True, exist_ok=True)
+        renamed_subdir = pathlib.Path(f"{self.file_share}/moved_to2/ren_dir2")
+        renamed_subdir.mkdir(parents=True, exist_ok=True)
+        renamed_sub_subdir = pathlib.Path(f"{self.file_share}/moved_to3/subdir3/ren_dir3")
+        renamed_sub_subdir.mkdir(parents=True, exist_ok=True)
+
+        # Test (failed) renaming of non-existant dir
+        self.assertEqual(rename(f"{self.file_share}/nonexistant", f"{self.file_share}/moved_to/nonexistant"), {'info': f"'{self.file_share}/moved_to/nonexistant' does not exist", 'rec_status': 'Not renamed'})
+        # Test renaming after moving from share's root directory
+        self.assertEqual(rename(f"{self.file_share}/ren_dir", str(renamed_dir)), {'found_path': f'{self.file_share}/moved_to/ren_dir', 'info': 'Renamed', 'rec_status': 'Renamed'})
+        # Test renaming after moving to a nested directory
+        self.assertEqual(rename(f"{self.file_share}/subdir/ren_dir2", str(renamed_subdir)), {'found_path': f'{self.file_share}/moved_to2/ren_dir2', 'info': 'Renamed', 'rec_status': 'Renamed'})
+        # Test renaming after moving nested directory to a nested directory
+        self.assertEqual(rename(f"{self.file_share}/subdir3/ren_dir3", str(renamed_sub_subdir)), {'found_path': f'{self.file_share}/moved_to3/subdir3/ren_dir3', 'info': 'Renamed', 'rec_status': 'Renamed'})
+        # Test renaiming ... to already present dir (autogenerated suffix)
+        # TODO
+
+
+    def test_recover(self):
+        deleted_path = pathlib.Path(f"{self.file_share}/deleted")  # before deletion
+        deleted_dir_recycle = pathlib.Path(f"{self.recycle}/deleted")  # after deletion
+        deleted_path_subdir = pathlib.Path(f"{self.file_share}/deleted2/subdir")
+        deleted_subdir_recycle = pathlib.Path(f"{self.recycle}/deleted2/subdir")
+        deleted_dir_recycle.mkdir(parents=True, exist_ok=True)
+        deleted_subdir_recycle.mkdir(parents=True, exist_ok=True)
+        deleted_dir_recycle.chmod(RECYCLE_MODE)
+        deleted_subdir_recycle.chmod(RECYCLE_MODE)
+
+        # Test recovery of deletion from share's root directory
+        self.assertEqual(recover(str(deleted_path), self.file_share),        {'found_path': f'{deleted_dir_recycle}',         'info': 'Recovered', 'rec_status': 'Recovered'})
+        assert not deleted_dir_recycle.exists()
+        # Test recovery of deletion from nested directory
+        self.assertEqual(recover(str(deleted_path_subdir), self.file_share), {'found_path': f'{deleted_subdir_recycle}', 'info': 'Recovered', 'rec_status': 'Recovered'})
+        assert not deleted_subdir_recycle.exists()
+        # Test (failed) recovery because the dir does not exist
+        self.assertEqual(recover(f"{self.file_share}/not_in_recycle", self.file_share), {'info': f"'{self.recycle}/not_in_recycle' does not exist", 'rec_status': 'Not recovered'})
+        # Test recovery ... to already present dir (autogenerated suffix)
+        # TODO
+
 
     def test_read_log(self): 
-        #result = [
+#        result = [
 #{'time': '2024-01-25 16:34:15', 'domain': "", 'user': 'ghost', 'client': '192.168.76.1', 'share': '/srv/public', 'operation': 'renameat', 'status': 'ok', 'sourcename': '/srv/public/ren_dir', 'targetname': '/srv/public/6/ren_dir'}, 
 #{'time': '2024-01-25 16:58:09', 'domain': "", 'user': 'ghost', 'client': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/ren_dir'},
 #{'client': '192.168.76.1', 'domain': "", 'operation': 'renameat', 'share': '/srv/public', 'sourcename': '/srv/public/ren_dir', 'status': 'ok', 'targetname': '/srv/public/6/ren_dir',   'time': '2024-02-08 18:55:52',   'user': 'ghost'},
 #{'client': '192.168.76.1', 'domain': "", 'operation': 'unlinkat', 'share': '/srv/public', 'sourcename': '/srv/public/ren_dir', 'status': 'ok', 'time': '2024-07-02 16:52:47', 'user': 'ghost'}]
-
-#       self.assertEqual(read_log("ren_dir", self.audit_log), result)
+#        self.assertEqual(read_log("ren_dir", self.audit_log), result)
         
         result_deleted = [
 {'client': '192.168.76.1', 'domain': "UNDELETER",'ip': "192.168.76.1", 'is_forbidden': False, 'is_recovered': False, 'operation': 'unlinkat', 'share': '/srv/public', 'sourcename': '/srv/public/dir', 'status': 'ok', 'time': '2025-04-28T19:30:58.117605+03:00', 'user': 'user1'}
@@ -91,15 +108,17 @@ class RmTestCase(unittest.TestCase):
         self.assertEqual(read_log("dir", self.audit_log), result_deleted)    
 
 
-    def test_Remember_and_recall(self):
-        is_remembered = save_recovered(self.recovered_path, "2025-11-12T20:00:03.446986+03:00")
-        save_recovered(self.recovered_path, "2025-11-12T19:58:30.332536+03:00")
-        save_recovered(self.recovered_path, "2025-11-26T18:46:32.409712+03:00")
-        self.assertTrue(is_remembered)
-        print("REMEBER RECOVERD: ", is_remembered)
-        print("REMEMBER", self.recovered_path)
+    def test_save_and_recall(self):
+        self.assertTrue(save_recovered(self.recovered_path, "2025-11-12T20:00:03.446986+03:00"))
+        self.assertTrue(save_recovered(self.recovered_path, "2025-13-32T25:58:30.332536+03:00"))  # not ISO format
+        self.assertTrue(save_recovered(self.recovered_path, "XXXX-XX-XXXXX:XX:XX.XXXXXXXXX:XX"))
+        self.assertTrue(save_recovered(self.recovered_path, "2025-11-12T19:58:30.332536+03:00"))
+        self.assertTrue(save_recovered(self.recovered_path, "JUNK_AuJScCvJv2roqsNZCF2rMehqiMw"))
+        self.assertTrue(save_recovered(self.recovered_path, "JUNK_AuJScCv"))
+        self.assertTrue(save_recovered(self.recovered_path, "2025-11-26T18:46:32.409712+03:00"))
 
-        self.assertEqual(recall_recovered(self.recovered_path), self.recovered_contents)
+        expected_contents = ["2025-11-12T20:00:03.446986+03:00", "2025-11-12T19:58:30.332536+03:00", "2025-11-26T18:46:32.409712+03:00"]
+        self.assertEqual(recall_recovered(self.recovered_path), expected_contents)  # will read only ISO date format
    
 
     # def test_get_user_groups_by_name(self):
@@ -182,4 +201,4 @@ class RmTestCase(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main(exit=False)
-    
+ 
