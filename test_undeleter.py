@@ -9,6 +9,7 @@ import string
 import random
 
 RECYCLE_MODE = 0o333
+TEST_PATH = "/tmp/undeleter_tests"
 
 if 'unittest.util' in __import__('sys').modules:
     # Show full diff in self.assertEqual.
@@ -17,11 +18,10 @@ if 'unittest.util' in __import__('sys').modules:
 
 class RmTestCase(unittest.TestCase):
 
-    test_path = "/tmp/undeleter_tests"
     #print("temp dir", temp_dir)
     random_name = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(8))
     #print("random", random_name)
-    test_dir = pathlib.Path(test_path)
+    test_dir = pathlib.Path(TEST_PATH)
     test_dir.mkdir(parents=True, exist_ok=True)
     temp_dir = pathlib.Path(pathlib.PurePath(test_dir, random_name))
     temp_dir.mkdir(parents=True, exist_ok=True)
@@ -35,21 +35,92 @@ class RmTestCase(unittest.TestCase):
         self.audit_log_contents = r'''2025-04-28T19:30:44.799995+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/Новая папка|/srv/public/dir
 2025-04-28T19:30:49.417506+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/dir/Лист Microsoft Excel.xlsx|/srv/public/dir/2.xlsx
 2025-04-28T19:30:58.102980+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/dir/2.xlsx|/srv/public/.recycle/2/2.xlsx
-2025-04-28T19:30:58.117605+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/dir'''
+2025-04-28T19:30:58.117605+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/dir
+2025-11-12T19:58:30.332536+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/489
+2025-11-12T20:00:03.443620+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/489/Лист Microsoft Excel.xlsx|/srv/public/.recycle/489/Лист Microsoft Excel.xlsx
+2025-11-12T20:00:03.446986+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/489
+2025-11-26T18:30:47.414635+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/880/880.xlsx|/srv/public/.recycle/880/880.xlsx
+2025-11-26T18:30:48.223051+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/880
+2025-11-26T18:31:36.383462+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/Новая папка|/srv/public/245
+2025-11-26T18:31:48.498429+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/245/Лист Microsoft Excel.xlsx|/srv/public/.recycle/245/Лист Microsoft Excel.xlsx
+2025-11-26T18:31:48.502830+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/245
+2025-11-26T18:40:44.996232+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/333/Лист Microsoft Excel.xlsx|/srv/public/.recycle/333/Лист Microsoft Excel.xlsx
+2025-11-26T18:40:44.999242+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/333
+2025-11-26T18:46:32.405638+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/333/Лист Microsoft Excel.xlsx|/srv/public/.recycle/333/Лист Microsoft Excel.xlsx
+2025-11-26T18:46:32.409712+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/333
+2025-11-26T18:50:22.783517+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/forbidden1/new2/Лист Microsoft Excel.xlsx|/srv/public/.recycle/forbidden1/new2/Лист Microsoft Excel.xlsx
+2025-11-26T18:50:22.788829+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/forbidden1/new2
+2025-11-26T18:59:31.514764+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/Новая папка|/srv/public/forbidden2
+2025-11-26T18:59:37.974039+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/forbidden2/Новая папка|/srv/public/forbidden2/erw
+2025-11-26T18:59:43.981047+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/forbidden2/Лист Microsoft Excel.xlsx|/srv/public/.recycle/forbidden2/Лист Microsoft Excel.xlsx
+2025-11-26T18:59:43.984600+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/forbidden2/erw
+2025-11-26T18:59:43.988065+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/forbidden2
+2025-12-03T16:14:03.361895+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/Новая папка|/srv/public/257
+2025-12-03T16:14:10.523120+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/257/Лист Microsoft Excel.xlsx|/srv/public/.recycle/257/Лист Microsoft Excel.xlsx
+2025-12-03T16:14:10.528988+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/257
+2025-12-03T16:34:04.786198+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.129|192.168.76.129|/srv/public|renameat|ok|/srv/public/333|/srv/public/489/333
+2025-12-03T16:35:37.938944+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.129|192.168.76.129|/srv/public|renameat|ok|/srv/public/899/Новая папка|/srv/public/257/Новая папка
+2025-12-03T16:35:52.196805+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.129|192.168.76.129|/srv/public|renameat|ok|/srv/public/257/Новая папка (2)|/srv/public/257/sub
+2025-12-03T16:35:58.031300+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.129|192.168.76.129|/srv/public|renameat|ok|/srv/public/257/Новая папка|/srv/public/257/sub/Новая папка
+'''
+# 2025-11-26T18:40:38.021501+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/Новая папка|/srv/public/333 
+
 
         self.audit_log = f'{self.file_share}/samba/audit.log'
-        self.recovered_path = pathlib.Path(f"{self.file_share}/samba/undeleter_recovered.log")
-#        one = pathlib.Path(f"{self.file_share}/1")
-#        two = pathlib.Path(f"{self.file_share}/2")
+        self.recovered_path = f"{self.file_share}/samba/undeleter_recovered.log"
         self.recycle = pathlib.Path(f"{self.file_share}/{RECYCLE_DIR}")
         self.file_share.mkdir(parents=True, exist_ok=True)
-#        one.mkdir(parents=True, exist_ok=True)
-#        two.mkdir(parents=True, exist_ok=True)
         self.recycle.mkdir(parents=True, exist_ok=True)
         self.recycle.chmod(RECYCLE_MODE)  # mimic actual recycle dir
         
         with open(self.audit_log, "w", encoding ="utf-8") as f:
             f.write(self.audit_log_contents)
+
+
+    def test_save_and_recall(self):
+        self.assertTrue(save_recovered(self.recovered_path, "2025-11-12T20:00:03.446986+03:00"))
+        self.assertTrue(save_recovered(self.recovered_path, "2025-13-32T25:58:30.332536+03:00"))  # not ISO format
+        self.assertTrue(save_recovered(self.recovered_path, "XXXX-XX-XXXXX:XX:XX.XXXXXXXXX:XX"))
+        self.assertTrue(save_recovered(self.recovered_path, "2025-11-12T19:58:30.332536+03:00"))
+        self.assertTrue(save_recovered(self.recovered_path, "2025-11-26T18:46:32.409712+03:00"))
+        self.assertTrue(save_recovered(self.recovered_path, "JUNK_AuJScCvJv2roqsNZCF2rMehqiMw"))
+        self.assertTrue(save_recovered(self.recovered_path, "JUNK_AuJScCv"))
+
+        expected_contents = ["2025-11-12T20:00:03.446986+03:00", "2025-11-12T19:58:30.332536+03:00", "2025-11-26T18:46:32.409712+03:00"]
+        self.assertEqual(recall_recovered(self.recovered_path), expected_contents)  # will read only ISO date format
+        
+
+    def test_read_log(self):
+        result_mixed = [
+{'time': '2025-11-26T18:40:44.999242+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1',  'ip': '192.168.76.1',   'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/333', 'is_forbidden': False, 'is_recovered': False}, 
+{'time': '2025-11-26T18:46:32.409712+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1',  'ip': '192.168.76.1',   'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/333', 'is_forbidden': False, 'is_recovered': True},
+{'time': '2025-12-03T16:34:04.786198+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.129','ip': '192.168.76.129', 'share': '/srv/public', 'operation': 'renameat', 'status': 'ok', 'sourcename': '/srv/public/333', 'targetname': '/srv/public/489/333', 'is_forbidden': False, 'is_recovered': False}
+        ]
+        recovery_contents = "2025-11-26T18:46:32.409712+03:00\n"
+        recovery_path_readlog = f'{self.samba_dir}recovery_path_read.log' 
+        with open(recovery_path_readlog, "w", encoding ="utf-8") as f:
+            f.write(recovery_contents)
+        self.assertEqual(read_log("333", self.audit_log, recovery_path_readlog), result_mixed)
+        #self.assertEqual(read_log("forbidden1", self.audit_log), "")
+        
+        result_deleted = [
+{'client': '192.168.76.1', 'domain': "UNDELETER",'ip': "192.168.76.1", 'is_forbidden': False, 'is_recovered': False, 'operation': 'unlinkat', 'share': '/srv/public', 'sourcename': '/srv/public/dir', 'status': 'ok', 'time': '2025-04-28T19:30:58.117605+03:00', 'user': 'user1'}
+        ]
+        self.assertEqual(read_log("dir", self.audit_log, self.recovered_path), result_deleted)       
+
+
+    def test_is_forbidden_path(self):
+        self.assertTrue(is_forbidden_path("/srv/public/forbidden1"))
+        self.assertTrue(is_forbidden_path("/srv/public/forbidden2"))
+        
+        self.assertTrue(is_forbidden_path("/srv/public/forbidden1/"))
+        self.assertTrue(is_forbidden_path("/srv/public/forbidden2/"))
+        
+        self.assertTrue(is_forbidden_path("/srv/public/forbidden1/sub_dir1"))
+        self.assertTrue(is_forbidden_path("/srv/public/forbidden2/sub_dir2"))
+        
+        self.assertFalse(is_forbidden_path("/srv/public/dir1"))
+        self.assertFalse(is_forbidden_path("/srv/public/dir2"))
 
 
     def test_rename(self):
@@ -69,6 +140,8 @@ class RmTestCase(unittest.TestCase):
         # Test renaming after moving nested directory to a nested directory
         self.assertEqual(rename(f"{self.file_share}/subdir3/ren_dir3", str(renamed_sub_subdir)), {'found_path': f'{self.file_share}/moved_to3/subdir3/ren_dir3', 'info': 'Renamed', 'rec_status': 'Renamed'})
         # Test renaiming ... to already present dir (autogenerated suffix)
+        # TODO
+        # Test actual renaming in place without moving
         # TODO
 
 
@@ -93,33 +166,6 @@ class RmTestCase(unittest.TestCase):
         # Test recovery ... to already present dir (autogenerated suffix)
         # TODO
 
-
-    def test_read_log(self): 
-#        result = [
-#{'time': '2024-01-25 16:34:15', 'domain': "", 'user': 'ghost', 'client': '192.168.76.1', 'share': '/srv/public', 'operation': 'renameat', 'status': 'ok', 'sourcename': '/srv/public/ren_dir', 'targetname': '/srv/public/6/ren_dir'}, 
-#{'time': '2024-01-25 16:58:09', 'domain': "", 'user': 'ghost', 'client': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/ren_dir'},
-#{'client': '192.168.76.1', 'domain': "", 'operation': 'renameat', 'share': '/srv/public', 'sourcename': '/srv/public/ren_dir', 'status': 'ok', 'targetname': '/srv/public/6/ren_dir',   'time': '2024-02-08 18:55:52',   'user': 'ghost'},
-#{'client': '192.168.76.1', 'domain': "", 'operation': 'unlinkat', 'share': '/srv/public', 'sourcename': '/srv/public/ren_dir', 'status': 'ok', 'time': '2024-07-02 16:52:47', 'user': 'ghost'}]
-#        self.assertEqual(read_log("ren_dir", self.audit_log), result)
-        
-        result_deleted = [
-{'client': '192.168.76.1', 'domain': "UNDELETER",'ip': "192.168.76.1", 'is_forbidden': False, 'is_recovered': False, 'operation': 'unlinkat', 'share': '/srv/public', 'sourcename': '/srv/public/dir', 'status': 'ok', 'time': '2025-04-28T19:30:58.117605+03:00', 'user': 'user1'}
-        ]
-        self.assertEqual(read_log("dir", self.audit_log), result_deleted)    
-
-
-    def test_save_and_recall(self):
-        self.assertTrue(save_recovered(self.recovered_path, "2025-11-12T20:00:03.446986+03:00"))
-        self.assertTrue(save_recovered(self.recovered_path, "2025-13-32T25:58:30.332536+03:00"))  # not ISO format
-        self.assertTrue(save_recovered(self.recovered_path, "XXXX-XX-XXXXX:XX:XX.XXXXXXXXX:XX"))
-        self.assertTrue(save_recovered(self.recovered_path, "2025-11-12T19:58:30.332536+03:00"))
-        self.assertTrue(save_recovered(self.recovered_path, "JUNK_AuJScCvJv2roqsNZCF2rMehqiMw"))
-        self.assertTrue(save_recovered(self.recovered_path, "JUNK_AuJScCv"))
-        self.assertTrue(save_recovered(self.recovered_path, "2025-11-26T18:46:32.409712+03:00"))
-
-        expected_contents = ["2025-11-12T20:00:03.446986+03:00", "2025-11-12T19:58:30.332536+03:00", "2025-11-26T18:46:32.409712+03:00"]
-        self.assertEqual(recall_recovered(self.recovered_path), expected_contents)  # will read only ISO date format
-   
 
     # def test_get_user_groups_by_name(self):
         # '''works on my machine ¯\_(ツ)_/¯'''
@@ -181,24 +227,16 @@ class RmTestCase(unittest.TestCase):
         # self.assertFalse(is_valid_user('NOTEXIST', RECOVER_GROUPS))
 
 
-    # def test_is_conn_allowed(self):
-        # correct_address1 = "192.168.76.129"
-        # input1 = b'{"timestamp": "2024-12-13T16:09:56.462554+0300", "version": "4.17.12-Debian", "smb_conf": "/etc/samba/smb.conf", "sessions": {"3509269828": {"session_id": "3509269828", "server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "uid": 3000019, "gid": 100, "username": "UNDELETER\\\\user1", "groupname": "users", "remote_machine": "192.168.76.129", "hostname": "ipv4:192.168.76.129:62177", "session_dialect": "SMB3_02", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "partial"}}}, "tcons": {"3246703567": {"service": "public", "server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "tcon_id": "3246703567", "session_id": "3509269828", "machine": "192.168.76.129", "connected_at": "2024-12-13T15:24:09.297009+03:00", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "full"}}}, "open_files": {"/srv/public/.": {"service_path": "/srv/public", "filename": ".", "fileid": {"devid": 2049, "inode": 48, "extid": 0}, "num_pending_deletes": 0, "opens": {"1448/15": {"server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "uid": 3000019, "share_file_id": "15", "sharemode": {"hex": "0x00000007", "READ": true, "WRITE": true, "DELETE": true, "text": "RWD"}, "access_mask": {"hex": "0x00100081", "READ_DATA": true, "WRITE_DATA": false, "APPEND_DATA": false, "READ_EA": false, "WRITE_EA": false, "EXECUTE": false, "READ_ATTRIBUTES": true, "WRITE_ATTRIBUTES": false, "DELETE_CHILD": false, "DELETE": false, "READ_CONTROL": false, "WRITE_DAC": false, "SYNCHRONIZE": true, "ACCESS_SYSTEM_SECURITY": false, "text": "R"}, "caching": {"READ": false, "WRITE": false, "HANDLE": false, "hex": "0x00000000", "text": ""}, "oplock": {}, "lease": {}, "opened_at": "2024-12-13T15:24:58.892958+03:00"}}}}}\n'
-        # incorrect_address1 = "10.0.0.99"
-        # input_no_sessions = b'{"timestamp": "2024-12-13T16:09:56.462554+0300", "version": "4.17.12-Debian", "smb_conf": "/etc/samba/smb.conf", "tcons": {"3246703567": {"service": "public", "server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "tcon_id": "3246703567", "session_id": "3509269828", "machine": "192.168.76.129", "connected_at": "2024-12-13T15:24:09.297009+03:00", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "full"}}}, "open_files": {"/srv/public/.": {"service_path": "/srv/public", "filename": ".", "fileid": {"devid": 2049, "inode": 48, "extid": 0}, "num_pending_deletes": 0, "opens": {"1448/15": {"server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "uid": 3000019, "share_file_id": "15", "sharemode": {"hex": "0x00000007", "READ": true, "WRITE": true, "DELETE": true, "text": "RWD"}, "access_mask": {"hex": "0x00100081", "READ_DATA": true, "WRITE_DATA": false, "APPEND_DATA": false, "READ_EA": false, "WRITE_EA": false, "EXECUTE": false, "READ_ATTRIBUTES": true, "WRITE_ATTRIBUTES": false, "DELETE_CHILD": false, "DELETE": false, "READ_CONTROL": false, "WRITE_DAC": false, "SYNCHRONIZE": true, "ACCESS_SYSTEM_SECURITY": false, "text": "R"}, "caching": {"READ": false, "WRITE": false, "HANDLE": false, "hex": "0x00000000", "text": ""}, "oplock": {}, "lease": {}, "opened_at": "2024-12-13T15:24:58.892958+03:00"}}}}}\n'
-        # input_two_users =  b'{"timestamp": "2024-12-13T16:29:13.111720+0300", "version": "4.17.12-Debian", "smb_conf": "/etc/samba/smb.conf", "sessions": {"3621540950": {"session_id": "3621540950", "server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "uid": 3000022, "gid": 100, "username": "UNDELETER\\\\user2", "groupname": "users", "remote_machine": "192.168.76.129", "hostname": "ipv4:192.168.76.129:62177", "session_dialect": "SMB3_02", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "partial"}}, "831862558": {"session_id": "831862558", "server_id": {"pid": "2501", "task_id": "0", "vnn": "4294967295", "unique_id": "448565975986327350"}, "uid": 3000022, "gid": 100, "username": "UNDELETER\\\\user2", "groupname": "users", "remote_machine": "192.168.76.129", "hostname": "ipv4:192.168.76.129:53235", "session_dialect": "SMB3_02", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "full"}}, "3509269828": {"session_id": "3509269828", "server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "uid": 3000019, "gid": 100, "username": "UNDELETER\\\\user1", "groupname": "users", "remote_machine": "192.168.76.129", "hostname": "ipv4:192.168.76.129:62177", "session_dialect": "SMB3_02", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "partial"}}}, "tcons": {"2612426645": {"service": "public", "server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "tcon_id": "2612426645", "session_id": "3621540950", "machine": "192.168.76.129", "connected_at": "2024-12-13T16:28:09.478701+03:00", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "full"}}, "3246703567": {"service": "public", "server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "tcon_id": "3246703567", "session_id": "3509269828", "machine": "192.168.76.129", "connected_at": "2024-12-13T15:24:09.297009+03:00", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "full"}}, "3762259073": {"service": "IPC$", "server_id": {"pid": "2501", "task_id": "0", "vnn": "4294967295", "unique_id": "448565975986327350"}, "tcon_id": "3762259073", "session_id": "831862558", "machine": "192.168.76.129", "connected_at": "2024-12-13T16:29:10.066829+03:00", "encryption": {"cipher": "-", "degree": "none"}, "signing": {"cipher": "AES-128-CMAC", "degree": "full"}}}, "open_files": {"/srv/public/.": {"service_path": "/srv/public", "filename": ".", "fileid": {"devid": 2049, "inode": 48, "extid": 0}, "num_pending_deletes": 0, "opens": {"1448/1257": {"server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "uid": 3000022, "share_file_id": "1257", "sharemode": {"hex": "0x00000007", "READ": true, "WRITE": true, "DELETE": true, "text": "RWD"}, "access_mask": {"hex": "0x00100081", "READ_DATA": true, "WRITE_DATA": false, "APPEND_DATA": false, "READ_EA": false, "WRITE_EA": false, "EXECUTE": false, "READ_ATTRIBUTES": true, "WRITE_ATTRIBUTES": false, "DELETE_CHILD": false, "DELETE": false, "READ_CONTROL": false, "WRITE_DAC": false, "SYNCHRONIZE": true, "ACCESS_SYSTEM_SECURITY": false, "text": "R"}, "caching": {"READ": false, "WRITE": false, "HANDLE": false, "hex": "0x00000000", "text": ""}, "oplock": {}, "lease": {}, "opened_at": "2024-12-13T16:28:51.331854+03:00"}, "1448/15": {"server_id": {"pid": "1448", "task_id": "0", "vnn": "4294967295", "unique_id": "17658613416815707345"}, "uid": 3000019, "share_file_id": "15", "sharemode": {"hex": "0x00000007", "READ": true, "WRITE": true, "DELETE": true, "text": "RWD"}, "access_mask": {"hex": "0x00100081", "READ_DATA": true, "WRITE_DATA": false, "APPEND_DATA": false, "READ_EA": false, "WRITE_EA": false, "EXECUTE": false, "READ_ATTRIBUTES": true, "WRITE_ATTRIBUTES": false, "DELETE_CHILD": false, "DELETE": false, "READ_CONTROL": false, "WRITE_DAC": false, "SYNCHRONIZE": true, "ACCESS_SYSTEM_SECURITY": false, "text": "R"}, "caching": {"READ": false, "WRITE": false, "HANDLE": false, "hex": "0x00000000", "text": ""}, "oplock": {}, "lease": {}, "opened_at": "2024-12-13T15:24:58.892958+03:00"}}}}}\n'
-        
-        # self.assertTrue(is_conn_allowed(correct_address1, input1))
-        # self.assertFalse(is_conn_allowed(incorrect_address1, input1))
-        
-        # self.assertFalse(is_conn_allowed(None, input1))
-        # self.assertFalse(is_conn_allowed(correct_address1, None))
-        # self.assertFalse(is_conn_allowed(None, None))
-        
-        # self.assertFalse(is_conn_allowed(correct_address1, input_no_sessions))
-        # self.assertFalse(is_conn_allowed(correct_address1, input_two_users))
-
-
 if __name__ == '__main__':
     unittest.main(exit=False)
- 
+    def rm_tree(path):
+        path = pathlib.Path(path)
+        for child in path.glob('*'):
+            if child.is_file():
+                child.unlink()
+            else:
+                rm_tree(child)
+        path.rmdir()
+    
+    #rm_tree(str(TEST_PATH))
+

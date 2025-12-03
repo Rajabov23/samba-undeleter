@@ -27,7 +27,7 @@ from urllib.parse import unquote
 HOST = '0.0.0.0'
 PORT = 999
 AUDIT_LOG = "/var/log/samba/audit.log"
-RECOVERY_LOG = "/var/log/samba/undeleter_recovered.log"
+RECOVERY_LOG = "/var/log/samba/undeleter_recovered.log" 
 #RECOVER_GROUPS = ["teachers"]
 SHARE_DIR = "/srv/public"
 RECYCLE_DIR = ".recycle"
@@ -37,11 +37,14 @@ UNLINKAT = "unlinkat"
 FORBIDDEN_DIRS = ["/srv/public/forbidden1", "/srv/public/forbidden2"]
 
 
-def read_log(query, file_name):
+def read_log(query, file_name, recovery_log):
     '''Read Samba vfs audit log to search for deleted/moved files/folders'''
     max_index = 7 # 7 is targetname
     parced_lines = []
-    already_recovered = recall_recovered(RECOVERY_LOG)
+    already_recovered = recall_recovered(recovery_log)
+    #print("ALREADY RECOVERED", already_recovered)
+    #print("FILE NAME", file_name)
+    #print("RECOVERY LOG", recovery_log)
     with open(file_name, "r", encoding="utf-8") as file:
         for line in file:
             try:
@@ -69,7 +72,7 @@ def read_log(query, file_name):
                 single_line["is_forbidden"] = is_forbidden
                 if single_line.get("time") in already_recovered:
                     single_line["is_recovered"] = True
-                    print("TIME IN ALREADY RECOVERED")
+                    #print("TIME IN ALREADY RECOVERED", single_line.get("time"))
                 else:
                     single_line["is_recovered"] = False
                     
@@ -224,9 +227,9 @@ def save_recovered(file_path, timestamp):
     '''Write recovered entries to a file'''
     try:
         path = pathlib.Path(file_path)
-        print(f'Opening {path}')
+        print(f'Opening {path}', timestamp)
         with path.open("a", newline="\n", encoding="UTF-8") as f:
-            f.write(timestamp + "\n") #instead of string, for in keys and items, confirm string, key = value f'{key}={value}'
+            f.write(timestamp + "\n")
             
             result = True
 
@@ -234,13 +237,13 @@ def save_recovered(file_path, timestamp):
         result = False
         
     return result
-    
 
-def recall_recovered(file_path):
+
+def recall_recovered(file_path_str):
     '''Read previously recovered entries from a file'''
-    path = pathlib.Path(file_path)
+    file_path = pathlib.Path(file_path_str)
     result = []
-    if path.is_file():
+    if file_path.exists():
         try:
             with open(file_path, "r", encoding="UTF-8") as file_object:
                 for line in file_object:
@@ -259,7 +262,7 @@ def recall_recovered(file_path):
         except ValueError as e:
             print("UNABLE TO LOAD FILE (Recall):", e)
     else:
-        print(f'{type(path)} is not a file')
+        print(f'"{file_path}" does not exist')
         
     #print("ALREADY RECOVERED LIST", result)
     return result
@@ -323,7 +326,7 @@ class HttpGetHandler(BaseHTTPRequestHandler):
         decoded_url = unquote(self.path)
         print(decoded_url)
         client_message = decoded_url.removeprefix('/search/')
-        found_lines = read_log(client_message, AUDIT_LOG)  
+        found_lines = read_log(client_message, AUDIT_LOG, RECOVERY_LOG)  
         print("FOUND LINES", found_lines)
         print('GET MSG:', client_message)
         #print(self.client_address)
@@ -378,8 +381,8 @@ class HttpGetHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
 
-def is_forbidden_path(path):
-    path = pathlib.Path(path)
+def is_forbidden_path(path_str):
+    path = pathlib.Path(path_str)
     for i in FORBIDDEN_DIRS:
         forbidden_dir = pathlib.Path(i)
         if forbidden_dir in path.parents or forbidden_dir == path:
