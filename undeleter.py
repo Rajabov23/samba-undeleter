@@ -55,7 +55,6 @@ def read_log(query, file_name, recovery_log):
                 time = prefix.split(" ")[0]
                 #time = datetime.fromisoformat(time)
                 single_line["time"] = time
-                #print(single_line.get("time"))
                 single_line["domain"] = domain_and_user[0]
                 single_line["user"] = domain_and_user[2]
                 single_line["client"] = parts[0]
@@ -64,9 +63,7 @@ def read_log(query, file_name, recovery_log):
                 single_line["operation"] = parts[3]
                 single_line["status"] = parts[4]
                 single_line["sourcename"] = parts[5].strip()
-                if len(parts) >= max_index+1:
-                    print("MALFORMED LINE:", line)
-                elif len(parts) == max_index:
+                if len(parts) == max_index:
                     single_line["targetname"] = parts[max_index-1].strip()
                 is_forbidden = is_forbidden_path(single_line.get("sourcename"))
                 single_line["is_forbidden"] = is_forbidden
@@ -78,6 +75,7 @@ def read_log(query, file_name, recovery_log):
                     
                 parced_lines.append(single_line)
             except IndexError:
+                print("MALFORMED LINE:", line)
                 continue
 
     found_lines = []
@@ -93,7 +91,6 @@ def find_by_timestamp(query, file_name):
     '''Read Samba vfs audit log to search line by provided timestamp'''
     max_index = 7 # 7 is targetname
     recovery_line = {}
-    already_recovered = recall_recovered(RECOVERY_LOG)
     with open(file_name, "r", encoding="utf-8") as file:
         for line in file:
             try:
@@ -112,21 +109,16 @@ def find_by_timestamp(query, file_name):
                 single_line["operation"] = parts[3]
                 single_line["status"] = parts[4]
                 single_line["sourcename"] = parts[5].strip()
-                if len(parts) >= max_index+1:
-                    print("MALFORMED LINE:", line)
-                elif len(parts) == max_index:
+                if len(parts) == max_index:
                     single_line["targetname"] = parts[max_index-1].strip()
                 is_forbidden = is_forbidden_path(single_line.get("sourcename"))
                 single_line["is_forbidden"] = is_forbidden
-                if single_line.get("time") in already_recovered:
-                    single_line["is_recovered"] = True
-                else:
-                    single_line["is_recovered"] = False
 
                 if time == query:
                     recovery_line = single_line
-                    break # found
+                    break # first find is enough
             except IndexError:
+                print("MALFORMED LINE:", line)
                 continue
 
     return recovery_line
@@ -268,24 +260,6 @@ def recall_recovered(file_path_str):
     return result
 
 
-def get_user_groups_by_name(user):
-    """find user groups as list by full user name"""
-    regex = r"^.+\\"
-    out = subprocess.run(["id", user], capture_output=True)
-    unparced_id = out.stdout.decode('utf-8')
-    groups_regex = re.search(r" groups=(.+[)])(:?\s|$)", unparced_id)
-    groups = []
-    if groups_regex:
-        groups_id = groups_regex.group(1).split(",")
-        for j in groups_id:
-            g = re.search(r".+\((.+)\)", j)
-            if g:
-                group = g.group(1).strip()
-                group = re.sub(regex, "", group)
-                groups.append(group)           
-    return groups
-
-
 def _(s):
     """Translate incoming string"""
 #    print("_ LANGUAGE", LANGUAGE)
@@ -304,8 +278,8 @@ def _(s):
                       'Recovered': 'Wiederhergestellt',
                       'Not renamed': 'Nicht umbenannt',
                       'Renamed': 'Umbenannt',
-                      'does not exist': '...',  # TODO
-                      'Unknown reason': '...',  # TODO
+                      'does not exist': 'existiert nicht',  
+                      'Unknown reason': 'ein unbekannter Grund',  
                      }
 
     try:

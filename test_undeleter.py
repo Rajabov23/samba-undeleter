@@ -3,6 +3,7 @@
 
 import unittest
 from undeleter import *
+from undeleter import _ 
 from unittest.mock import patch, mock_open
 import pathlib
 import string
@@ -48,8 +49,8 @@ class RmTestCase(unittest.TestCase):
 2025-11-26T18:40:44.999242+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/333
 2025-11-26T18:46:32.405638+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/333/Лист Microsoft Excel.xlsx|/srv/public/.recycle/333/Лист Microsoft Excel.xlsx
 2025-11-26T18:46:32.409712+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/333
-2025-11-26T18:50:22.783517+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/forbidden1/new2/Лист Microsoft Excel.xlsx|/srv/public/.recycle/forbidden1/new2/Лист Microsoft Excel.xlsx
-2025-11-26T18:50:22.788829+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/forbidden1/new2
+2025-11-26T18:50:22.783517+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/forbidden1/forb_subdir1/Лист Microsoft Excel.xlsx|/srv/public/.recycle/forbidden1/forb_subdir1/Лист Microsoft Excel.xlsx
+2025-11-26T18:50:22.788829+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/forbidden1/forb_subdir1
 2025-11-26T18:59:31.514764+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/Новая папка|/srv/public/forbidden2
 2025-11-26T18:59:37.974039+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/forbidden2/Новая папка|/srv/public/forbidden2/erw
 2025-11-26T18:59:43.981047+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/forbidden2/Лист Microsoft Excel.xlsx|/srv/public/.recycle/forbidden2/Лист Microsoft Excel.xlsx
@@ -62,6 +63,9 @@ class RmTestCase(unittest.TestCase):
 2025-12-03T16:35:37.938944+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.129|192.168.76.129|/srv/public|renameat|ok|/srv/public/899/Новая папка|/srv/public/257/Новая папка
 2025-12-03T16:35:52.196805+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.129|192.168.76.129|/srv/public|renameat|ok|/srv/public/257/Новая папка (2)|/srv/public/257/sub
 2025-12-03T16:35:58.031300+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.129|192.168.76.129|/srv/public|renameat|ok|/srv/public/257/Новая папка|/srv/public/257/sub/Новая папка
+2025-12-17T17:58:48.008667+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/fällt aus/Лист Microsoft Excel.xlsx|/srv/public/.recycle/fällt aus/Лист Microsoft Excel.xlsx
+2025-12-17T17:58:48.012004+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|unlinkat|ok|/srv/public/fällt aus
+2025-12-03T16:14:03.361895+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/Wrong index|/srv/public/257|/Wrong index
 '''
 # 2025-11-26T18:40:38.021501+03:00 ud smbd_audit: UNDELETER\user1|192.168.76.1|192.168.76.1|/srv/public|renameat|ok|/srv/public/Новая папка|/srv/public/333 
 
@@ -90,6 +94,7 @@ class RmTestCase(unittest.TestCase):
         self.assertEqual(recall_recovered(self.recovered_path), expected_contents)  # will read only ISO date format
         
 
+
     def test_read_log(self):
         result_mixed = [
 {'time': '2025-11-26T18:40:44.999242+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1',  'ip': '192.168.76.1',   'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/333', 'is_forbidden': False, 'is_recovered': False}, 
@@ -100,13 +105,30 @@ class RmTestCase(unittest.TestCase):
         recovery_path_readlog = f'{self.samba_dir}recovery_path_read.log' 
         with open(recovery_path_readlog, "w", encoding ="utf-8") as f:
             f.write(recovery_contents)
-        self.assertEqual(read_log("333", self.audit_log, recovery_path_readlog), result_mixed)
-        #self.assertEqual(read_log("forbidden1", self.audit_log), "")
-        
+
+        result_forbidden2 = [{'time': '2025-11-26T18:59:43.988065+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1', 'ip': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/forbidden2', 'is_forbidden': True, 'is_recovered': False}]
+        result_forb_subdir1 = [{'time': '2025-11-26T18:50:22.788829+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1', 'ip': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/forbidden1/forb_subdir1', 'is_forbidden': True, 'is_recovered': False}]
+        result_umlaut = [{'time': '2025-12-17T17:58:48.012004+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1', 'ip': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/fällt aus', 'is_forbidden': False, 'is_recovered': False}]
+        self.assertEqual(read_log("333", self.audit_log, recovery_path_readlog), result_mixed)        
+        self.assertEqual(read_log("forbidden2", self.audit_log, recovery_path_readlog), result_forbidden2)
+        self.assertEqual(read_log("forb_subdir1", self.audit_log, recovery_path_readlog), result_forb_subdir1) 
+        self.assertEqual(read_log("fällt aus", self.audit_log, recovery_path_readlog), result_umlaut)
+        #self.assertRaises(IndexError, read_log, "Wrong index", self.audit_log, recovery_path_readlog)
+
         result_deleted = [
 {'client': '192.168.76.1', 'domain': "UNDELETER",'ip': "192.168.76.1", 'is_forbidden': False, 'is_recovered': False, 'operation': 'unlinkat', 'share': '/srv/public', 'sourcename': '/srv/public/dir', 'status': 'ok', 'time': '2025-04-28T19:30:58.117605+03:00', 'user': 'user1'}
         ]
         self.assertEqual(read_log("dir", self.audit_log, self.recovered_path), result_deleted)       
+    
+    
+    def test_find_by_timestamp(self):
+        self.assertEqual(find_by_timestamp("2025-11-26T18:31:48.502830+03:00", self.audit_log), {'time': '2025-11-26T18:31:48.502830+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1', 'ip': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/245', 'is_forbidden': False})
+        
+    
+    # def test__(self):
+        # translate = _("NO TRANSLATION")
+        # self.assertEqual(translate, "NT: NO TRANSLATION") 
+    
 
 
     def test_is_forbidden_path(self):
@@ -118,6 +140,9 @@ class RmTestCase(unittest.TestCase):
         
         self.assertTrue(is_forbidden_path("/srv/public/forbidden1/sub_dir1"))
         self.assertTrue(is_forbidden_path("/srv/public/forbidden2/sub_dir2"))
+        
+        self.assertTrue(is_forbidden_path("/srv/public/forbidden1/sub_dir1/"))
+        self.assertTrue(is_forbidden_path("/srv/public/forbidden2/sub_dir2/"))
         
         self.assertFalse(is_forbidden_path("/srv/public/dir1"))
         self.assertFalse(is_forbidden_path("/srv/public/dir2"))
@@ -238,5 +263,5 @@ if __name__ == '__main__':
                 rm_tree(child)
         path.rmdir()
     
-    #rm_tree(str(TEST_PATH))
+    rm_tree(str(TEST_PATH))
 
