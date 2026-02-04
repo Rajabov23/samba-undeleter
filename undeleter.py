@@ -77,6 +77,9 @@ def read_log(query, file_name, recovery_log):
             except IndexError:
                 print("MALFORMED LINE:", line)
                 continue
+            except KeyError:
+                print("NO SUCH KEY:", line)
+
 
     found_lines = []
     look_for = "/" + query
@@ -120,7 +123,9 @@ def find_by_timestamp(query, file_name):
             except IndexError:
                 print("MALFORMED LINE:", line)
                 continue
-
+            except KeyError:
+                print("NO SUCH KEY:", line)
+                
     return recovery_line
 
 
@@ -168,7 +173,7 @@ def rename(original_path_str, found_path_str):
 
 
 def move(original_path, found_path):
-    '''Agnostic file/dir mover''' 
+    '''Move file or dir and change permissions if it was deleted''' 
     is_success = False
 
 #    print('moving from', found_path)
@@ -201,14 +206,14 @@ def move(original_path, found_path):
     return is_success
 
 
-def Copy_perms(recovered_path):
+def Copy_perms(original_path):
     '''Read permissions from share root(SHARE_DIR) and apply to recovered directory'''
-    reference_path = pathlib.Path(SHARE_DIR)
-    shutil.copystat(reference_path, recovered_path)
+    shared_dir = pathlib.Path(SHARE_DIR)
+    shutil.copystat(shared_dir, original_path)
 
-    for path in recovered_path.rglob("*"):
+    for path in original_path.rglob("*"):
         try:
-            shutil.copystat(reference_path, path)
+            shutil.copystat(shared_dir, path)
         except FileNotFoundError:
             print("Error: The source or destination directory does not exist.")
         except Exception as e:
@@ -225,7 +230,8 @@ def save_recovered(file_path, timestamp):
             
             result = True
 
-    except PermissionError:
+    except PermissionError as e:
+        print(e)
         result = False
         
     return result
@@ -235,27 +241,27 @@ def recall_recovered(file_path_str):
     '''Read previously recovered entries from a file'''
     file_path = pathlib.Path(file_path_str)
     result = []
-    if file_path.exists():
-        try:
-            with open(file_path, "r", encoding="UTF-8") as file_object:
-                for line in file_object:
-                    try:
-                        dt_object = datetime.fromisoformat(line.strip())
-                    except ValueError as e:
-                        dt_object = None
-                        #print("Not ISO format:", e)
-                    if dt_object:
-                        result.append(line.strip())
-                    
-        except SyntaxError as e:
-            print(e)
-        except PermissionError:
-            print("PermissionError: Unable to open", file_path)
-        except ValueError as e:
-            print("UNABLE TO LOAD FILE (Recall):", e)
+    if not file_path.exists():
+        return []
     else:
         print(f'"{file_path}" does not exist')
         
+    try:
+        with open(file_path, "r", encoding="UTF-8") as file_object:
+            for line in file_object:
+                try:
+                    dt_object = datetime.fromisoformat(line.strip())
+                    result.append(line.strip())
+                except ValueError as e:
+                    print("Not ISO format:", e)
+                                        
+    except SyntaxError as e:
+        print(e)
+    except PermissionError:
+        print("PermissionError: Unable to open", file_path)
+    except ValueError as e:
+        print("UNABLE TO LOAD FILE (Recall):", e)
+
     #print("ALREADY RECOVERED LIST", result)
     return result
 
@@ -263,23 +269,25 @@ def recall_recovered(file_path_str):
 def _(s):
     """Translate incoming string"""
 #    print("_ LANGUAGE", LANGUAGE)
-    russian_strings = {'Got connection from': 'Получено сообщение от',
-                      'Server is listening on': 'Сервер слушает на',
-                      'Not recovered': 'Не восстановлено',
-                      'Recovered': 'Восстановлено',
-                      'Not renamed': 'Не переименовано',
-                      'Renamed': 'Переименовано',
-                      'does not exist': 'не существует',
-                      'Unknown reason': 'Неизвестная причина',
+    russian_strings = {"Got connection from": "Получено сообщение от",
+                      "Server is listening on": "Сервер слушает на",
+                      "Not recovered": "Не восстановлено",
+                      "Recovered": "Восстановлено",
+                      "Not renamed": "Не переименовано",
+                      "Renamed": "Переименовано",
+                      "does not exist": "не существует",
+                      "Unknown reason": "Неизвестная причина",
+                      "This path could not be recovered. Check back with your administrator": "Этот путь не может быть восстановлен. Обратитесь к администратору",
                      }
-    deutsch_strings = {'Got connection from': 'Verbindung hergestellt von',
-                      'Server is listening on': 'der Server hört auf',
-                      'Not recovered': 'Nicht wiederhergestellt',
-                      'Recovered': 'Wiederhergestellt',
-                      'Not renamed': 'Nicht umbenannt',
-                      'Renamed': 'Umbenannt',
-                      'does not exist': 'existiert nicht',  
-                      'Unknown reason': 'ein unbekannter Grund',  
+    deutsch_strings = {"Got connection from": "Verbindung hergestellt von",
+                      "Server is listening on": "der Server hört auf",
+                      "Not recovered": "Nicht wiederhergestellt",
+                      "Recovered": "Wiederhergestellt",
+                      "Not renamed": "Nicht umbenannt",
+                      "Renamed": "Umbenannt",
+                      "does not exist": "existiert nicht",  
+                      "Unknown reason": "ein unbekannter Grund",
+                      "This path could not be recovered. Check back with your administrator": "Dieser Weg konnte nicht wiederhergestellt. Fragen Sie nach Ihr Administrator",
                      }
 
     try:
@@ -296,15 +304,13 @@ def _(s):
 
 class HttpGetHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        '''Request for search'''
+        '''Request for search in URL'''
         decoded_url = unquote(self.path)
         print(decoded_url)
         client_message = decoded_url.removeprefix('/search/')
         found_lines = read_log(client_message, AUDIT_LOG, RECOVERY_LOG)  
         print("FOUND LINES", found_lines)
         print('GET MSG:', client_message)
-        #print(self.client_address)
-        #print(self.path)
 
         answer = {"found_lines": found_lines,  
                     }
@@ -313,12 +319,9 @@ class HttpGetHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "application/json")
         self.end_headers()
         self.wfile.write(bytes(json_data, 'utf8'))
-        # else:
-            # self.send_response(204)
-            # self.end_headers()
 
     def do_POST(self):
-        '''Request for recovery'''
+        '''Request for recovery in POST'''
         global LANGUAGE
         content_length = int(self.headers['Content-Length'])
         
@@ -333,15 +336,15 @@ class HttpGetHandler(BaseHTTPRequestHandler):
         if not recover_line.get("is_forbidden"):
             recovery_result = do_recovery(recover_line)
         else:
-            recovery_result = {"rec_status": _("This path can not be recovered. Check back with your administrator"),
-                     "info": _("This path can not be recovered. Check back with your administrator"),}
+            recovery_result = {"rec_status": _("This path could not be recovered. Check back with your administrator"),
+                                "info": _("This path could not be recovered. Check back with your administrator"),}
         
         print('RECOVER_LINE:', recover_line)
         print('recovery_result', recovery_result)
         try:
             json_data = json.dumps(recovery_result)
-        except Exception:
-            print('UNABLE TO LOAD JSON (POST)')
+        except json.JSONDecodeError:
+            print('Unable to load json(POST)')
             json_data = {}
             
         print("JSON DATA", json_data)
@@ -356,6 +359,7 @@ class HttpGetHandler(BaseHTTPRequestHandler):
 
 
 def is_forbidden_path(path_str):
+    '''Check if requested for recovery path could not be recovered without administrator intervention'''
     path = pathlib.Path(path_str)
     for i in FORBIDDEN_DIRS:
         forbidden_dir = pathlib.Path(i)
@@ -423,7 +427,7 @@ def Listen(server_class=HTTPServer, handler_class=HttpGetHandler):
     httpd = server_class(server_address, handler_class)
     try:
         httpd.serve_forever()
-    except KeyboardInterrupt:
+    except KeyboardInterrupt: #allow ctrl + c 
         httpd.server_close()
 
 
