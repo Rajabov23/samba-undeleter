@@ -54,7 +54,7 @@ def read_log(query, file_name, recovery_log):
                 domain_and_user = re.sub(".+smbd_audit: (.+)", r"\1", prefix).partition("\\")
                 time = prefix.split(" ")[0]
                 #time = datetime.fromisoformat(time)
-                single_line["time"] = time
+                single_line["time_iso"] = time
                 single_line["domain"] = domain_and_user[0]
                 single_line["user"] = domain_and_user[2]
                 single_line["client"] = parts[0]
@@ -67,9 +67,9 @@ def read_log(query, file_name, recovery_log):
                     single_line["targetname"] = parts[max_index-1].strip()
                 is_forbidden = is_forbidden_path(single_line.get("sourcename"))
                 single_line["is_forbidden"] = is_forbidden
-                if single_line.get("time") in already_recovered:
+                if single_line.get("time_iso") in already_recovered:
                     single_line["is_recovered"] = True
-                    #print("TIME IN ALREADY RECOVERED", single_line.get("time"))
+                    #print("TIME IN ALREADY RECOVERED", single_line.get("time_iso"))
                 else:
                     single_line["is_recovered"] = False
                     
@@ -103,7 +103,7 @@ def find_by_timestamp(query, file_name):
                 domain_and_user = re.sub(".+smbd_audit: (.+)", r"\1", prefix).partition("\\")
                 time = prefix.split(" ")[0]
                 #time = datetime.fromisoformat(time)
-                single_line["time"] = time
+                single_line["time_iso"] = time
                 single_line["domain"] = domain_and_user[0]
                 single_line["user"] = domain_and_user[2]
                 single_line["client"] = parts[0]
@@ -332,7 +332,7 @@ class HttpGetHandler(BaseHTTPRequestHandler):
             LANGUAGE = "English"
             
         print('POST DATA:', post_data)
-        recover_line = find_by_timestamp(post_data.get('time'), AUDIT_LOG)
+        recover_line = find_by_timestamp(post_data.get("time_iso"), AUDIT_LOG)
         if not recover_line.get("is_forbidden"):
             recovery_result = do_recovery(recover_line)
         else:
@@ -385,7 +385,7 @@ def do_recovery(line):
     else:
         print("NO DICTIONARY MATCH")
 
-    save_recovered(RECOVERY_LOG, line["time"])
+    save_recovered(RECOVERY_LOG, line["time_iso"])
 
     return rec_status
 

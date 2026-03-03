@@ -97,18 +97,18 @@ class RmTestCase(unittest.TestCase):
 
     def test_read_log(self):
         result_mixed = [
-{'time': '2025-11-26T18:40:44.999242+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1',  'ip': '192.168.76.1',   'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/333', 'is_forbidden': False, 'is_recovered': False}, 
-{'time': '2025-11-26T18:46:32.409712+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1',  'ip': '192.168.76.1',   'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/333', 'is_forbidden': False, 'is_recovered': True},
-{'time': '2025-12-03T16:34:04.786198+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.129','ip': '192.168.76.129', 'share': '/srv/public', 'operation': 'renameat', 'status': 'ok', 'sourcename': '/srv/public/333', 'targetname': '/srv/public/489/333', 'is_forbidden': False, 'is_recovered': False}
+{"time_iso": '2025-11-26T18:40:44.999242+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1',  'ip': '192.168.76.1',   'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/333', 'is_forbidden': False, 'is_recovered': False}, 
+{"time_iso": '2025-11-26T18:46:32.409712+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1',  'ip': '192.168.76.1',   'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/333', 'is_forbidden': False, 'is_recovered': True},
+{"time_iso": '2025-12-03T16:34:04.786198+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.129','ip': '192.168.76.129', 'share': '/srv/public', 'operation': 'renameat', 'status': 'ok', 'sourcename': '/srv/public/333', 'targetname': '/srv/public/489/333', 'is_forbidden': False, 'is_recovered': False}
         ]
         recovery_contents = "2025-11-26T18:46:32.409712+03:00\n"
         recovery_path_readlog = f'{self.samba_dir}recovery_path_read.log' 
         with open(recovery_path_readlog, "w", encoding ="utf-8") as f:
             f.write(recovery_contents)
 
-        result_forbidden2 = [{'time': '2025-11-26T18:59:43.988065+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1', 'ip': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/forbidden2', 'is_forbidden': True, 'is_recovered': False}]
-        result_forb_subdir1 = [{'time': '2025-11-26T18:50:22.788829+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1', 'ip': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/forbidden1/forb_subdir1', 'is_forbidden': True, 'is_recovered': False}]
-        result_umlaut = [{'time': '2025-12-17T17:58:48.012004+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1', 'ip': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/fällt aus', 'is_forbidden': False, 'is_recovered': False}]
+        result_forbidden2 = [{"time_iso": '2025-11-26T18:59:43.988065+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1', 'ip': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/forbidden2', 'is_forbidden': True, 'is_recovered': False}]
+        result_forb_subdir1 = [{"time_iso": '2025-11-26T18:50:22.788829+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1', 'ip': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/forbidden1/forb_subdir1', 'is_forbidden': True, 'is_recovered': False}]
+        result_umlaut = [{"time_iso": '2025-12-17T17:58:48.012004+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1', 'ip': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/fällt aus', 'is_forbidden': False, 'is_recovered': False}]
         self.assertEqual(read_log("333", self.audit_log, recovery_path_readlog), result_mixed)        
         self.assertEqual(read_log("forbidden2", self.audit_log, recovery_path_readlog), result_forbidden2)
         self.assertEqual(read_log("forb_subdir1", self.audit_log, recovery_path_readlog), result_forb_subdir1) 
@@ -116,13 +116,13 @@ class RmTestCase(unittest.TestCase):
         #self.assertRaises(IndexError, read_log, "Wrong index", self.audit_log, recovery_path_readlog)
 
         result_deleted = [
-{'client': '192.168.76.1', 'domain': "UNDELETER",'ip': "192.168.76.1", 'is_forbidden': False, 'is_recovered': False, 'operation': 'unlinkat', 'share': '/srv/public', 'sourcename': '/srv/public/dir', 'status': 'ok', 'time': '2025-04-28T19:30:58.117605+03:00', 'user': 'user1'}
+{'client': '192.168.76.1', 'domain': "UNDELETER",'ip': "192.168.76.1", 'is_forbidden': False, 'is_recovered': False, 'operation': 'unlinkat', 'share': '/srv/public', 'sourcename': '/srv/public/dir', 'status': 'ok', "time_iso": '2025-04-28T19:30:58.117605+03:00', 'user': 'user1'}
         ]
         self.assertEqual(read_log("dir", self.audit_log, self.recovered_path), result_deleted)       
     
     
     def test_find_by_timestamp(self):
-        self.assertEqual(find_by_timestamp("2025-11-26T18:31:48.502830+03:00", self.audit_log), {'time': '2025-11-26T18:31:48.502830+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1', 'ip': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/245', 'is_forbidden': False})
+        self.assertEqual(find_by_timestamp("2025-11-26T18:31:48.502830+03:00", self.audit_log), {"time_iso": '2025-11-26T18:31:48.502830+03:00', 'domain': 'UNDELETER', 'user': 'user1', 'client': '192.168.76.1', 'ip': '192.168.76.1', 'share': '/srv/public', 'operation': 'unlinkat', 'status': 'ok', 'sourcename': '/srv/public/245', 'is_forbidden': False})
         
     
     # def test__(self):

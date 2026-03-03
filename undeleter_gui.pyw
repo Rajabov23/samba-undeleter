@@ -7,7 +7,7 @@
 
 import json
 import tkinter as tk
-#from datetime import datetime
+from datetime import datetime
 from tkinter import ttk, messagebox, StringVar
 import os
 from copy import deepcopy
@@ -65,7 +65,7 @@ def restore_call(restore_timestamp):
     req.add_header('Content-Type', 'application/json')
 
     data = {}
-    data['time'] = restore_timestamp
+    data["time_iso"] = restore_timestamp
     data["language"] = LANGUAGE
     data = json.dumps(data)
     print("DATA", data)
@@ -127,7 +127,7 @@ def restore():
     
     original_time_value = None
     try:
-        time_column_header = _("time")
+        time_column_header = _("time_iso")
         column_headers = list(tv["columns"]) # Ensure it is a list
         time_column_index = -1
         if time_column_header in column_headers:
@@ -189,30 +189,27 @@ def create_treeview(data_list):
     print("DATA LIST", data_list)
     for to_clean_row in tv.get_children():
         tv.delete(to_clean_row)
-        
+
     if data_list is None: #or not isinstance(data_list, list):
         if info_display_var: info_display_var.set(_("Unable to load table data or data is invalid"))
         tv["columns"] = []
         print("DATA LIST IS NONE")
         return
-        
-    default_keys_order = ['sourcename', 'targetname', 'operation', 'client', 'time']
+
+    default_keys_order = ["sourcename", "targetname", "operation", "client", "time", "time_iso"]
     display_columns_translated = [_ (key) for key in default_keys_order] #Translated column names
 
-    if not data_list: 
-        tv["columns"] = display_columns_translated
-        tv.column("#0", width=0, stretch=tk.NO) 
-        for key_orig, col_display_text in zip(default_keys_order, display_columns_translated):
-            width = 250 if key_orig in ['sourcename', 'targetname'] else (180 if key_orig == 'time' else 120)
-            tv.column(col_display_text, width=width, minwidth=80, anchor="w", stretch=tk.YES) 
-            tv.heading(col_display_text, text=col_display_text, anchor='w')
-        return
+    # if not data_list: 
+        # tv["columns"] = display_columns_translated
+        # tv.column("#0", width=0, stretch=tk.NO) 
+        # for key_orig, col_display_text in zip(default_keys_order, display_columns_translated):
+            # width = 250 if key_orig in ["sourcename", "targetname"] else (180 if key_orig == "time_iso" else 120)
+            # tv.column(col_display_text, width=width, minwidth=80, anchor="w", stretch=tk.YES) 
+            # tv.heading(col_display_text, text=col_display_text, anchor='w')
+        # return
 
     data_list_processed = []
-    print("DATA LIST", type(data_list))
     for i in deepcopy(data_list):
-        print("III", i)
-
         for k_share, v_share in PATH_TO_SHARE.items():
             if i.get("sourcename", "").startswith(k_share):
                 i["sourcename"] = v_share + i["sourcename"].removeprefix(k_share)
@@ -225,38 +222,42 @@ def create_treeview(data_list):
             i["operation_display"] = _("moved")
         else:
             i["operation_display"] = i.get("operation", "") 
-
+                
+        if i.get("time_iso"):
+            gui_timestamp = datetime.fromisoformat(i.get("time_iso")).replace(microsecond=0).replace(tzinfo=None)
+            i["time"] = gui_timestamp
+            
         data_list_processed.append(i)
     print("DATA LIST PROCESSED", data_list_processed)
         
-    if not data_list_processed: 
-        tv["columns"] = display_columns_translated
-        tv.column("#0", width=0, stretch=tk.NO)
-        for key_orig, col_display_text in zip(default_keys_order, display_columns_translated):
-            width = 250 if key_orig in ['sourcename', 'targetname'] else (180 if key_orig == 'time' else 120)
-            tv.column(col_display_text, width=width, minwidth=80, anchor="w", stretch=tk.YES)
-            tv.heading(col_display_text, text=col_display_text, anchor='w')
-        return
+    # if not data_list_processed: 
+        # tv["columns"] = display_columns_translated
+        # tv.column("#0", width=0, stretch=tk.NO)
+        # for key_orig, col_display_text in zip(default_keys_order, display_columns_translated):
+            # width = 250 if key_orig in ["sourcename", "targetname"] else (180 if key_orig == "time_iso" else 120)
+            # tv.column(col_display_text, width=width, minwidth=80, anchor="w", stretch=tk.YES)
+            # tv.heading(col_display_text, text=col_display_text, anchor='w')
+        # return
 
     #Keys for extracting data from item_data in expected presedance
-    #'operation_display' contains already translated operations
-    keys_for_data_extraction = ['sourcename', 'targetname', 'operation_display', 'client', 'time']
+    #"operation_display" contains already translated operations
+    keys_for_data_extraction = ["sourcename", "targetname", "operation_display", "client", "time", "time_iso"]
 
     tv["columns"] = display_columns_translated
     tv.column("#0", width=0, stretch=tk.NO) 
     for key_orig, header_text in zip(default_keys_order, display_columns_translated): # Using default_keys_order to determine column width
-        width = 250 if key_orig in ['sourcename', 'targetname'] else (180 if key_orig == 'time' else 120)
+        width = 250 if key_orig in ["sourcename", "targetname"] else (180 if key_orig == "time_iso" else 120)
         tv.column(header_text, width=width, minwidth=80, anchor="w", stretch=tk.YES)
         tv.heading(header_text, text=header_text, anchor='w')
-    
+        
     # Data sorting: new data comes first (by time)
-    # Expecting that field 'time' contains ISO-compatable time string
+    # Expecting that field "time_iso" contains ISO-compatable time string
     try:
-        data_list_processed.sort(key=lambda x: x.get('time', ''), reverse=True)
+        data_list_processed.sort(key=lambda x: x.get("time", ''), reverse=True)
     except Exception as e:
         print(f"Could not sort data by time: {e}")
 
-    for item_data in data_list_processed: 
+    for item_data in data_list_processed:   
         row_values = []
         for key in keys_for_data_extraction: # Extracting values by keys
             row_values.append(item_data.get(key, '')) 
@@ -266,9 +267,11 @@ def create_treeview(data_list):
             item_tags.append("forbidden")
         elif item_data.get('is_recovered'):
             item_tags.append("recovered")
-       
-        tv.insert('', 'end', values=row_values, tags=tuple(item_tags))
         
+        tv.insert('', 'end', values=row_values, tags=tuple(item_tags))
+ 
+        tv.column(_("time_iso"), width=0, stretch=tk.NO)
+
     tv.tag_configure("recovered", background="light grey")
     tv.tag_configure("forbidden", background="IndianRed1")
 
@@ -309,6 +312,7 @@ def _(s):
         "moved": "перемещен", 
         "deleted": "удален",   
         "time": "Время",
+        "time_iso": "Время ISO",
         "client": "Клиент",
         "operation": "Операция",
         "sourcename": "Старый путь",
@@ -332,7 +336,7 @@ def _(s):
     deutschStrings = {
         "Undeleter client": "Undeleter Klient", 
         "Please enter the search query!": "Bitte geben Sie den Suchbegriff ein!", 
-        "Searching for:": "Suche nach:",
+        "Searching for:": "Suchen nach:",
         "Search finished. Found entries:": "Suche abgeschlossen. Gefundene Einträge:",  
         "Search error": "Fehler bei der Suche",
         "Error": "Fehler",
@@ -361,6 +365,7 @@ def _(s):
         "moved": "verschoben", 
         "deleted": "gelöscht",  
         "time": "Zeit",
+        "time_iso": "Zeit ISO",
         "client": "Client", 
         "operation": "Aktion", 
         "sourcename": "Altepfad", 
@@ -405,7 +410,7 @@ def change_language(event=None):
         if lang_combobox: lang_combobox.set(LANGUAGE) 
         return
 
-    LANGUAGE = selected_language_key 
+    LANGUAGE = selected_language_key
 
     root.title(_("Undeleter client"))
    
@@ -415,7 +420,9 @@ def change_language(event=None):
     button_restore.config(text=_("Recover"))
     info_display_var.set(_("Ready to work"))
     
+    print("LANGUAGE", LANGUAGE)
     create_treeview(FOUND_LINES)
+    
 
 
 if __name__ == '__main__':
